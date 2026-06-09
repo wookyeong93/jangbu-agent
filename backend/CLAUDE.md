@@ -18,8 +18,8 @@
 > 상세 정책: [docs/policy/ledger.md](../docs/policy/ledger.md) | 삭제 결정: [docs/adr/0003-user-delete-ledger.md](../docs/adr/0003-user-delete-ledger.md)
 
 ### 등록·수정 규칙
-- `trx_type`: `매입` / `매출` / `지출` 3종만 허용. 그 외 값은 서비스 레이어에서 거부.
-- `amount`: 양수 정수만 허용. 소수점 불가. 0 불가.
+- `trx_type`: `PURCHASE`(매입) / `SALE`(매출) / `EXPENSE`(지출) 3종만 허용. db_dump.sql 참조. 그 외 값은 서비스 레이어에서 거부.
+- `amount`: 0 이상 정수만 허용. 소수점 불가.
 - `trx_date`: 기본값 오늘. 사용자가 과거·미래 날짜로 수정 가능.
 - `trx_name`: 선택 입력 (NULL 허용).
 - 수정 가능 필드: `trx_type` / `trx_date` / `amount` / `trx_name`. `user_no`·`ledger_no`는 변경 불가.
@@ -52,6 +52,7 @@ com.wookyeong.jangbu_agent
 │       ├── repository/      — JPA Repository / QueryDSL
 │       └── service/         — 비즈니스 로직
 └── infra/                   — 인프라 관심사 (Spring Security, JWT, 외부 API)
+    ├── logging/             — MDC 필터 (RequestLoggingFilter)
     └── security/
         ├── SecurityConfig.java
         └── jwt/             — JWT 발급·검증·필터
@@ -60,6 +61,29 @@ com.wookyeong.jangbu_agent
 - 모든 도메인은 `controller / dto / entity / repository / service` 5-레이어 구조를 따른다.
 - `common`과 `infra`는 도메인에 의존하지 않는다. 도메인이 `common`을 사용한다.
 - 도메인 간 직접 의존은 금지. 공유 데이터가 필요하면 `common` 경유 또는 ID 참조만 허용.
+
+## Observability
+
+### 목표
+서버 모니터링 시 에러 로그 추적. 비즈니스 예외(도메인 규칙 위반)와 서버 예외를 로그 레벨로 구분한다.
+
+### MDC 필드
+`RequestLoggingFilter`(OncePerRequestFilter)가 모든 요청 진입 시 자동 주입하고, 응답 후 반드시 제거한다.
+- `requestId`: UUID — 동일 요청의 로그를 하나로 묶는 트레이싱 키
+- `userId`: JWT에서 파싱한 userId. 미인증 요청(회원가입·로그인)은 `"anonymous"`
+
+### 로그 레벨 기준
+| 레벨  | 대상                                              |
+|-------|---------------------------------------------------|
+| WARN  | BusinessException, MethodArgumentNotValidException |
+| ERROR | 그 외 모든 예외 (서버 오류)                         |
+
+- 정상 흐름에는 INFO 이하 로그를 찍지 않는다 (노이즈 차단).
+- 스택 트레이스는 ERROR 레벨에만 포함한다.
+
+### 구현 위치
+- `infra/logging/RequestLoggingFilter` — MDC requestId·userId 주입 및 요청 완료 후 정리
+- `common/exception/GlobalExceptionHandler` — 예외 레벨 분리 (WARN / ERROR)
 
 ## 테스트
 - 집계·계산 로직은 단위 테스트 필수. 경계값(0건, 단일건, 월 경계) 포함.
