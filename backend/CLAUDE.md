@@ -12,8 +12,25 @@
 
 ## 도메인 규칙
 - 모든 장부 조회는 user_no로 격리된다. 다른 사용자 데이터 접근 금지.
-- 순익 = 판매합 − 매입합 − 지출합. amount는 양수 절댓값, trx_type으로 구분.
 - 가이드 생성 시 계산에 쓴 기준 수치(매입/매출/지출/순익)를 tb_daily_guide에 스냅샷으로 저장.
+
+## 장부 도메인
+> 상세 정책: [docs/policy/ledger.md](../docs/policy/ledger.md) | 삭제 결정: [docs/adr/0003-user-delete-ledger.md](../docs/adr/0003-user-delete-ledger.md)
+
+### 등록·수정 규칙
+- `trx_type`: `매입` / `매출` / `지출` 3종만 허용. 그 외 값은 서비스 레이어에서 거부.
+- `amount`: 양수 정수만 허용. 소수점 불가. 0 불가.
+- `trx_date`: 기본값 오늘. 사용자가 과거·미래 날짜로 수정 가능.
+- `trx_name`: 선택 입력 (NULL 허용).
+- 수정 가능 필드: `trx_type` / `trx_date` / `amount` / `trx_name`. `user_no`·`ledger_no`는 변경 불가.
+
+### 삭제 정책
+- user 삭제 시 해당 user의 장부 전체를 물리 삭제 (`ON DELETE CASCADE`). 거래기록 보존 안 함 (ADR-0003).
+
+### 월별 KPI (파생값 — DB 미저장, 조회 시 계산)
+- 총매입 / 총매출 / 총지출: 해당 월 `trx_type`별 `amount` 합산
+- 순이익 = 매출 − 매입 − 지출
+- 마진율(%) = (매출 − 매입) / 매입 × 100. 매입 = 0이면 마진율 = 0 (zero-division 방지)
 
 ## 패키지 구조
 
