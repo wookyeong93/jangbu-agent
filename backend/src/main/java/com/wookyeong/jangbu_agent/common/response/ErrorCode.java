@@ -34,6 +34,7 @@ public enum ErrorCode {
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "U003", "비밀번호가 올바르지 않습니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "U004", "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "U005", "만료된 토큰입니다."),
+    SAME_AS_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "U006", "새 비밀번호는 현재 비밀번호와 달라야 합니다."),
 
     // ── Ledger ───────────────────────────────────────────────────────────────
     LEDGER_NOT_FOUND(HttpStatus.NOT_FOUND, "L001", "장부 항목을 찾을 수 없습니다."),
