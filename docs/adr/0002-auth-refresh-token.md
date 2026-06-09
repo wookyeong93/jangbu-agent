@@ -21,6 +21,12 @@
        BCrypt는 매번 다른 salt를 사용해 비결정론적이므로 DB 직접 조회 불가 → 부적합.
     2. **DB 탈취 시 토큰 재사용 불가** → DB에는 해시값만 저장되므로 원본 UUID를 역산할 수 없어
        탈취한 해시값으로 재발급 요청을 보내도 클라이언트가 보내는 원본 UUID와 일치하지 않음.
+- **refresh token 전달 방식: HttpOnly 쿠키.**
+  - 로그인 응답 body에는 access token만 포함. refresh token은 response body에 담지 않는다.
+  - 서버가 `Set-Cookie: refreshToken=<UUID>; HttpOnly; Secure; SameSite=Strict; Path=/api/auth` 로 설정.
+  - 재발급·로그아웃 요청 시 브라우저가 쿠키를 자동 전송, 서버에서 쿠키로 읽는다.
+  - HttpOnly 를 선택한 이유: response body 에 담으면 JS 로 읽힐 수 있어 XSS 공격 시 탈취 가능.
+    HttpOnly 쿠키는 JS 접근이 원천 차단되므로 XSS 로 탈취 불가.
 
 ## 고려한 대안
 - 무상태 JWT-only(서버 저장 X): 단순하나 토큰 무효화 불가 → 로그아웃·탈취 대응 어려움
