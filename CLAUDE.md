@@ -12,6 +12,8 @@
 
 ## 스키마 규칙
 - `db/schema_ddl.sql`이 유일한 스키마 진실 공급원(Single Source of Truth)이다. 사용자가 항상 갱신·관리하며 신뢰한다.
+- `db/db_dump.sql`은 공통 코드 초기 데이터의 진실 공급원이다.
+  코드값(trxType 등)을 서비스 로직에서 참조하기 전, 반드시 이 파일에서 실제 code 값을 확인한다.
 - ORM 엔티티 등록 및 CRUD 구현 전, 반드시 DDL에서 다음을 확인한다:
   - 컬럼 타입·길이, `NOT NULL` / `NULL` 여부, `DEFAULT` 값
   - `PK` / `FK` (참조 테이블, `ON DELETE` 동작)
