@@ -4,6 +4,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
 
@@ -11,13 +13,8 @@ import java.util.Optional;
  * JPA Auditing 설정.
  *
  * <p>{@code auditorAware} 빈이 created_by / updated_by 에 들어갈 값을 결정한다.
- * 현재는 "system" 고정 (JWT 미연결 단계).
- *
- * <p>TODO (JWT 연결 단계): SecurityContextHolder 에서 인증 사용자 ID를 꺼내도록 교체.
- * <pre>
- * return () -> Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
- *         .map(Authentication::getName);
- * </pre>
+ * 인증된 요청: SecurityContext 의 userId 사용.
+ * 미인증 요청(회원가입 등): "system" 폴백.
  */
 @Configuration
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
@@ -25,6 +22,13 @@ public class JpaConfig {
 
     @Bean
     public AuditorAware<String> auditorAware() {
-        return () -> Optional.of("system");
+        return () -> {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated()
+                    && !"anonymousUser".equals(auth.getPrincipal())) {
+                return Optional.of(auth.getName());
+            }
+            return Optional.of("system");
+        };
     }
 }

@@ -1,5 +1,9 @@
 package com.wookyeong.jangbu_agent.infra.security;
 
+import com.wookyeong.jangbu_agent.infra.security.jwt.JwtAuthFilter;
+import com.wookyeong.jangbu_agent.infra.security.jwt.JwtProperties;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -8,26 +12,27 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Spring Security 설정.
  *
- * <p>현재 상태 (개발 1단계):
- * - 세션 비활성화 (Stateless JWT 구조)
- * - CSRF 비활성화 (REST API + JWT 조합에서 불필요)
- * - 모든 요청 허용 — JWT 필터 구현 후 아래 TODO 로 교체 예정
+ * <p>인가 규칙:
+ * <ul>
+ *   <li>{@code /api/auth/**} — 인증 없이 허용 (회원가입·로그인·재발급)
+ *   <li>그 외 {@code /api/**} — JWT Access Token 필수
+ * </ul>
  *
- * <p>TODO (JWT 연결 단계):
- * <pre>
- * .authorizeHttpRequests(auth -> auth
- *     .requestMatchers("/api/auth/**").permitAll()
- *     .anyRequest().authenticated())
- * .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
- * </pre>
+ * <p>세션 미사용 (Stateless), CSRF 비활성화 (REST API + JWT 조합).
+ * 인증 실패 시 Spring Security 기본 동작(401)을 그대로 사용한다.
  */
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(JwtProperties.class)
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -36,7 +41,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .anyRequest().permitAll());
+                .requestMatchers("/api/auth/**").permitAll()
+                .anyRequest().authenticated())
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
