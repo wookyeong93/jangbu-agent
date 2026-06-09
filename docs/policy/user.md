@@ -27,3 +27,23 @@
 |------|------|
 | 필수 여부 | 선택 입력 |
 | 길이 | 최대 100자 |
+
+## 회원 정보 수정 규칙
+
+### 변경 가능 필드
+| 필드 | 규칙 |
+|------|------|
+| `userNm` | 선택. 최대 100자. 전달 시 공백·빈 문자열 불가 |
+| `userPwd` | 선택. 변경 시 `currentPassword` 필수 |
+
+### 변경 불가 필드
+- `userId` (아이디)는 불변. 수정 엔드포인트에서 수신하지 않음.
+
+### 비밀번호 변경 규칙
+- `newPassword` 전달 시 `currentPassword` 필수 (누락 → 400)
+- `currentPassword`가 DB 저장값과 불일치 → 401 (`INVALID_PASSWORD`)
+- `newPassword` = 현재 비밀번호 → 400 (`SAME_AS_CURRENT_PASSWORD`)
+- `newPassword` 입력 규칙은 회원가입 비밀번호 규칙과 동일 (영문+숫자+특수문자 각 1자 이상, 최소 8자)
+
+### 공통 규칙
+- `userNm`, `newPassword` 모두 미전달 시 → 400 (`INVALID_INPUT`)

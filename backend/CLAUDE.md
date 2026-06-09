@@ -64,6 +64,13 @@ com.wookyeong.jangbu_agent
 ## 테스트
 - 집계·계산 로직은 단위 테스트 필수. 경계값(0건, 단일건, 월 경계) 포함.
 
+## 사용자 도메인
+> 상세 정책: [docs/policy/user.md](../docs/policy/user.md)
+
+- `userId`(아이디)는 불변. 수정 불가.
+- 수정 가능 필드: `userNm`(이름), `userPwd`(비밀번호). 둘 다 미전달 시 400.
+- 비밀번호 변경 시 `currentPassword` 필수 → 불일치 시 401, 새 비밀번호 = 현재 비밀번호 시 400.
+
 ## 인증·인가
 > 상세 정책: [docs/policy/auth.md](../docs/policy/auth.md)
 
