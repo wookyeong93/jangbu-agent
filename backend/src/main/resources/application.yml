@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: jangbu-agent
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jangbu
+    username: ${DB_USERNAME:jangbu}
+    password: ${DB_PASSWORD:jangbu}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.wookyeong.jangbu_agent.domain
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET:change-me-in-production-must-be-at-least-256-bits}
+  access-token-expiry: 3600000    # 1h (ms)
+  refresh-token-expiry: 604800000 # 7d (ms)
