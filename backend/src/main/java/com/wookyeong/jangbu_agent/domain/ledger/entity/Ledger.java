@@ -40,7 +40,7 @@ public class Ledger extends BaseEntity {
     @JoinColumn(name = "user_no", nullable = false)
     private User user;
 
-    /** tb_code 그룹코드 "TRX_TYPE" 의 code 값. 예: "BUY"(매입), "SALE"(매출), "EXPENSE"(지출). */
+    /** tb_code 그룹코드 "TRX_TYPE" 의 code 값. 예: "PURCHASE"(매입), "SALE"(매출), "EXPENSE"(지출). */
     @Column(name = "trx_type", nullable = false, length = 50)
     private String trxType;
 
