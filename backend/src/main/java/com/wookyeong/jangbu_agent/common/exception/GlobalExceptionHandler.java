@@ -40,6 +40,7 @@ public class GlobalExceptionHandler {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
+        log.warn("ValidationException: {}", message);
         return ResponseEntity.badRequest()
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
     }

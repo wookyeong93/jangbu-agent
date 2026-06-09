@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="app"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!--
+                %X{requestId} — MDC requestId (RequestLoggingFilter 주입)
+                %X{userId}    — MDC userId    (RequestLoggingFilter 주입)
+            -->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{requestId:--}][%X{userId:--}] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 기본 레벨: INFO. 불필요한 프레임워크 로그 차단 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- 애플리케이션 코드는 DEBUG 이상 출력 (개발 시 쿼리 등 확인용) -->
+    <logger name="com.wookyeong.jangbu_agent" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Hibernate SQL: show-sql=false 이므로 여기서도 차단 -->
+    <logger name="org.hibernate.SQL" level="OFF"/>
+
+</configuration>
