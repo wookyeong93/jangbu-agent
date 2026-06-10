@@ -6,6 +6,7 @@ import com.wookyeong.jangbu_agent.domain.user.dto.SignupRequest;
 import com.wookyeong.jangbu_agent.domain.user.dto.TokenResponse;
 import com.wookyeong.jangbu_agent.domain.user.service.AuthService;
 import com.wookyeong.jangbu_agent.infra.security.jwt.JwtProperties;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -26,6 +27,7 @@ import java.time.Duration;
  *   <li>재발급·로그아웃 요청: 브라우저가 쿠키를 자동 전송 → JS 에서 토큰 값에 접근 불가.
  * </ul>
  */
+@Tag(name = "인증", description = "회원가입·로그인·토큰 재발급·로그아웃")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -51,7 +53,7 @@ public class AuthController {
     }
 
     /** 브라우저가 쿠키를 자동 전송. {@code required=false} 로 쿠키 없을 때 400 대신 서비스에서 처리. */
-    @PostMapping("/reissue")
+    @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<TokenResponse>> reissue(
             @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken) {
         TokenResponse tokens = authService.reissue(refreshToken);

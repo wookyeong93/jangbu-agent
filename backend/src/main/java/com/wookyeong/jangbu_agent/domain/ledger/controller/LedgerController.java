@@ -7,6 +7,7 @@ import com.wookyeong.jangbu_agent.domain.ledger.dto.LedgerResponse;
 import com.wookyeong.jangbu_agent.domain.ledger.dto.LedgerUpdateRequest;
 import com.wookyeong.jangbu_agent.domain.ledger.service.LedgerService;
 import com.wookyeong.jangbu_agent.infra.security.UserPrincipal;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
  *
  * <p>모든 요청은 {@link UserPrincipal#getUserNo()} 로 격리된다.
  */
+@Tag(name = "장부", description = "매입·매출·지출 장부 CRUD")
 @RestController
 @RequestMapping("/api/ledger")
 @RequiredArgsConstructor

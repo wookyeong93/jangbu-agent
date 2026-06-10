@@ -4,6 +4,7 @@ import com.wookyeong.jangbu_agent.common.response.ApiResponse;
 import com.wookyeong.jangbu_agent.domain.user.dto.UpdateProfileRequest;
 import com.wookyeong.jangbu_agent.domain.user.service.UserService;
 import com.wookyeong.jangbu_agent.infra.security.UserPrincipal;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>변경 가능 항목: 이름, 비밀번호.
  */
+@Tag(name = "사용자", description = "사용자 프로필 수정 (이름·비밀번호)")
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
