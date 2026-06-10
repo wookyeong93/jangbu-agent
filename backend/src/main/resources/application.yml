@@ -4,8 +4,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://localhost:5432/jangbu
-    username: ${DB_USERNAME:jangbu}
-    password: ${DB_PASSWORD:jangbu}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -30,3 +30,7 @@ jwt:
   secret: ${JWT_SECRET:change-me-in-production-must-be-at-least-256-bits}
   access-token-expiry: 1800000    # 30m (ms)
   refresh-token-expiry: 604800000 # 7d (ms)
+
+springdoc:
+  swagger-ui:
+    try-it-out-enabled: true
