@@ -6,6 +6,8 @@ import com.wookyeong.jangbu_agent.domain.guide.dto.PurchaseCycleRow;
 import com.wookyeong.jangbu_agent.domain.guide.dto.WeekdaySalesResult;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideAnalysisMapper;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideRepository;
+import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
+import com.wookyeong.jangbu_agent.infra.ai.OpenAiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,8 @@ class GuideServiceTest {
 
     @Mock GuideAnalysisMapper guideAnalysisMapper;
     @Mock GuideRepository guideRepository;
+    @Mock UserRepository userRepository;
+    @Mock OpenAiClient openAiClient;
 
     @InjectMocks GuideService guideService;
 

@@ -1,0 +1,120 @@
+package com.wookyeong.jangbu_agent.infra.ai;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wookyeong.jangbu_agent.domain.guide.dto.GuideContextDto;
+import com.wookyeong.jangbu_agent.domain.guide.dto.WeekdaySalesResult;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import java.util.List;
+
+/**
+ * OpenAI Chat Completions API 클라이언트.
+ *
+ * <p>LLM 호출은 이 클래스가 단일 책임으로 담당한다.
+ * 수치 계산은 하지 않는다 — {@link GuideContextDto} 를 받아 해석 텍스트만 생성한다.
+ */
+@Component
+public class OpenAiClient {
+
+    private static final String SYSTEM_PROMPT = """
+            당신은 소상공인 매입/판매 장부 분석 도우미입니다.
+            아래 집계 데이터를 바탕으로 ① 매입 시점 조언 ② 매출 피크 활용 방법 ③ 매입 금액 조정 의견을 한국어로 작성하세요.
+            반드시 제공된 수치만 인용하고, 절대 숫자를 추정하거나 만들어 내지 마세요.
+            3~5문장으로 간결하게 작성하세요.
+            """;
+
+    private static final String[] DOW_NAMES = {"일", "월", "화", "수", "목", "금", "토"};
+
+    private final RestClient restClient;
+    private final OpenAiProperties props;
+
+    public OpenAiClient(RestClient.Builder builder, OpenAiProperties props) {
+        this.props = props;
+        this.restClient = builder
+                .baseUrl(props.getBaseUrl())
+                .defaultHeader("Authorization", "Bearer " + props.getApiKey())
+                .build();
+    }
+
+    public String generateGuide(GuideContextDto ctx) {
+        ChatRequest request = new ChatRequest(
+                props.getModel(),
+                List.of(
+                        new ChatRequest.Message("system", SYSTEM_PROMPT),
+                        new ChatRequest.Message("user", buildUserPrompt(ctx))
+                ),
+                600,
+                0.3
+        );
+
+        ChatResponse response = restClient.post()
+                .uri("/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(ChatResponse.class);
+
+        if (response == null || response.choices().isEmpty()) {
+            throw new IllegalStateException("OpenAI 응답이 비어 있습니다.");
+        }
+        return response.choices().get(0).message().content();
+    }
+
+    public String getModelName() {
+        return props.getModel();
+    }
+
+    private String buildUserPrompt(GuideContextDto ctx) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("[최근 28일 요약]\n");
+        sb.append("총매입: ").append(String.format("%,d", ctx.getTotalPurchase())).append("원 | ");
+        sb.append("총매출: ").append(String.format("%,d", ctx.getTotalSale())).append("원 | ");
+        sb.append("총지출: ").append(String.format("%,d", ctx.getTotalExpense())).append("원 | ");
+        sb.append("순익: ").append(String.format("%,d", ctx.getNetProfit())).append("원");
+        if (ctx.getMarginRate() != null) {
+            sb.append(" | 마진율: ").append(ctx.getMarginRate()).append("%");
+        }
+
+        if (ctx.getWeekdaySalesTrend() != null && !ctx.getWeekdaySalesTrend().isEmpty()) {
+            sb.append("\n\n[요일별 평균 매출]\n");
+            for (WeekdaySalesResult w : ctx.getWeekdaySalesTrend()) {
+                sb.append(DOW_NAMES[w.getDow()]).append("요일: ")
+                        .append(String.format("%,d", w.getAvgSale())).append("원  ");
+            }
+        }
+
+        sb.append("\n\n[매입 주기 분석]\n");
+        if (ctx.getAvgCycleDays() != null) {
+            sb.append("평균 매입 주기: ").append(ctx.getAvgCycleDays()).append("일 | ");
+            sb.append("마지막 매입: ").append(ctx.getDaysSinceLastPurchase()).append("일 전 (")
+                    .append(ctx.getLastPurchaseDate()).append(") | ");
+            sb.append("다음 예상 매입일: ").append(ctx.getNextExpectedDate());
+        } else if (ctx.getLastPurchaseDate() != null) {
+            sb.append("마지막 매입: ").append(ctx.getDaysSinceLastPurchase())
+                    .append("일 전 | 주기 계산 불가 (데이터 부족)");
+        } else {
+            sb.append("매입 이력 없음");
+        }
+
+        return sb.toString();
+    }
+
+    // ── OpenAI 요청·응답 내부 레코드 ──────────────────────────────────────────
+
+    record ChatRequest(
+            String model,
+            List<Message> messages,
+            @JsonProperty("max_tokens") int maxTokens,
+            double temperature
+    ) {
+        record Message(String role, String content) {}
+    }
+
+    record ChatResponse(List<Choice> choices) {
+        record Choice(Message message) {}
+        record Message(String content) {}
+    }
+}
