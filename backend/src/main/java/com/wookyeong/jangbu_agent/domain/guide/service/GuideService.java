@@ -8,6 +8,7 @@ import com.wookyeong.jangbu_agent.domain.user.entity.User;
 import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
 import com.wookyeong.jangbu_agent.infra.ai.GeminiClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
 
 /**
  * AI 가이드 비즈니스 로직.
@@ -24,6 +26,7 @@ import java.util.OptionalDouble;
  * <p>모든 수치 계산은 이 서비스(결정론적 코드)가 수행한다.
  * LLM 은 {@link GuideContextDto} 를 받아 해석만 한다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -32,11 +35,14 @@ public class GuideService {
     private static final int ANALYSIS_PERIOD_DAYS = 28;
     private static final String NO_ACTIVITY_GUIDE_TEXT =
             "최근 28일간 등록된 매입·매출 내역이 없습니다. 매입과 매출을 먼저 등록해 주세요.";
+    private static final String GUARDRAIL_VIOLATION_GUIDE_TEXT =
+            "AI 해석 결과에서 확인되지 않은 수치가 발견되어 가이드를 표시할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 
     private final GuideAnalysisMapper guideAnalysisMapper;
     private final GuideRepository guideRepository;
     private final UserRepository userRepository;
     private final GeminiClient geminiClient;
+    private final GuideGuardrail guideGuardrail;
 
     /**
      * 오늘 가이드를 반환한다.
@@ -46,6 +52,9 @@ public class GuideService {
      *
      * <p>매입·매출 내역이 둘 다 없으면 해석할 데이터가 없으므로 Gemini를 호출하지 않고
      * 안내 문구만 반환한다. 이 경우 DB에도 저장하지 않는다 (호출/저장 비용 모두 회피).
+     *
+     * <p>Gemini 응답이 {@link GuideGuardrail} 검증에 실패하면(컨텍스트에 없는 수치 포함)
+     * 안전 문구로 대체하고 DB에 저장하지 않는다 — 재시도는 하지 않는다.
      */
     @Transactional
     public GuideResponse getOrCreateDailyGuide(Integer userNo) {
@@ -71,6 +80,21 @@ public class GuideService {
         }
 
         String guideText = geminiClient.generateGuide(context);
+
+        Set<String> violations = guideGuardrail.findViolations(guideText, context);
+        if (!violations.isEmpty()) {
+            log.warn("Gemini 응답에서 컨텍스트에 없는 수치 발견: {}", violations);
+            return GuideResponse.builder()
+                    .guideDt(today)
+                    .guideText(GUARDRAIL_VIOLATION_GUIDE_TEXT)
+                    .basedPurchase(context.getTotalPurchase())
+                    .basedSale(context.getTotalSale())
+                    .basedExpense(context.getTotalExpense())
+                    .basedProfit(context.getNetProfit())
+                    .marginRate(context.getMarginRate())
+                    .modelName(null)
+                    .build();
+        }
 
         User userRef = userRepository.getReferenceById(userNo);
         DailyGuide guide = DailyGuide.builder()

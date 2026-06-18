@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +36,7 @@ class GuideServiceTest {
     @Mock GuideRepository guideRepository;
     @Mock UserRepository userRepository;
     @Mock GeminiClient geminiClient;
+    @Mock GuideGuardrail guideGuardrail;
 
     @InjectMocks GuideService guideService;
 
@@ -213,6 +215,26 @@ class GuideServiceTest {
         assertThat(response.getBasedPurchase()).isZero();
         assertThat(response.getModelName()).isNull();
         verify(geminiClient, never()).generateGuide(any());
+        verify(guideRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Gemini 응답이 Guardrail 위반 — 안전 문구로 대체, DB 저장 안 함")
+    void getOrCreateDailyGuide_guardrailViolation_returnsFallbackAndDoesNotPersist() {
+        Integer userNo = 1;
+        when(guideRepository.findByUserUserNoAndGuideDt(eq(userNo), any())).thenReturn(Optional.empty());
+        when(guideAnalysisMapper.getSummaryByPeriod(eq(userNo), any(), any()))
+                .thenReturn(periodSummary(1_200_000L, 980_000L, 150_000L));
+        when(guideAnalysisMapper.getWeekdaySalesTrend(userNo)).thenReturn(List.of());
+        when(guideAnalysisMapper.getPurchaseCycleRows(userNo)).thenReturn(List.of());
+        when(geminiClient.generateGuide(any())).thenReturn("특별히 999,999원 추가 매입을 추천합니다.");
+        when(guideGuardrail.findViolations(any(), any())).thenReturn(Set.of("999,999"));
+
+        GuideResponse response = guideService.getOrCreateDailyGuide(userNo);
+
+        assertThat(response.getGuideText()).contains("확인되지 않은");
+        assertThat(response.getBasedPurchase()).isEqualTo(1_200_000L);
+        assertThat(response.getModelName()).isNull();
         verify(guideRepository, never()).save(any());
     }
 
