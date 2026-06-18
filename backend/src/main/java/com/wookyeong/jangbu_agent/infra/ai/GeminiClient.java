@@ -10,13 +10,13 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 
 /**
- * OpenAI Chat Completions API 클라이언트.
+ * Gemini generateContent API 클라이언트.
  *
  * <p>LLM 호출은 이 클래스가 단일 책임으로 담당한다.
  * 수치 계산은 하지 않는다 — {@link GuideContextDto} 를 받아 해석 텍스트만 생성한다.
  */
 @Component
-public class OpenAiClient {
+public class GeminiClient {
 
     private static final String SYSTEM_PROMPT = """
             당신은 소상공인 매입/판매 장부 분석 도우미입니다.
@@ -28,38 +28,36 @@ public class OpenAiClient {
     private static final String[] DOW_NAMES = {"일", "월", "화", "수", "목", "금", "토"};
 
     private final RestClient restClient;
-    private final OpenAiProperties props;
+    private final GeminiProperties props;
 
-    public OpenAiClient(RestClient.Builder builder, OpenAiProperties props) {
+    public GeminiClient(GeminiProperties props) {
         this.props = props;
-        this.restClient = builder
+        this.restClient = RestClient.builder()
                 .baseUrl(props.getBaseUrl())
-                .defaultHeader("Authorization", "Bearer " + props.getApiKey())
+                .defaultHeader("x-goog-api-key", props.getApiKey())
                 .build();
     }
 
     public String generateGuide(GuideContextDto ctx) {
-        ChatRequest request = new ChatRequest(
-                props.getModel(),
-                List.of(
-                        new ChatRequest.Message("system", SYSTEM_PROMPT),
-                        new ChatRequest.Message("user", buildUserPrompt(ctx))
-                ),
-                600,
-                0.3
+        GenerateContentRequest request = new GenerateContentRequest(
+                new GenerateContentRequest.SystemInstruction(
+                        List.of(new GenerateContentRequest.Part(SYSTEM_PROMPT))),
+                List.of(new GenerateContentRequest.Content(
+                        "user", List.of(new GenerateContentRequest.Part(buildUserPrompt(ctx))))),
+                new GenerateContentRequest.GenerationConfig(0.3, 600)
         );
 
-        ChatResponse response = restClient.post()
-                .uri("/chat/completions")
+        GenerateContentResponse response = restClient.post()
+                .uri("/models/{model}:generateContent", props.getModel())
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(ChatResponse.class);
+                .body(GenerateContentResponse.class);
 
-        if (response == null || response.choices().isEmpty()) {
-            throw new IllegalStateException("OpenAI 응답이 비어 있습니다.");
+        if (response == null || response.candidates().isEmpty()) {
+            throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
         }
-        return response.choices().get(0).message().content();
+        return response.candidates().get(0).content().parts().get(0).text();
     }
 
     public String getModelName() {
@@ -102,19 +100,25 @@ public class OpenAiClient {
         return sb.toString();
     }
 
-    // ── OpenAI 요청·응답 내부 레코드 ──────────────────────────────────────────
+    // ── Gemini 요청·응답 내부 레코드 ──────────────────────────────────────────
 
-    record ChatRequest(
-            String model,
-            List<Message> messages,
-            @JsonProperty("max_tokens") int maxTokens,
-            double temperature
+    record GenerateContentRequest(
+            @JsonProperty("systemInstruction") SystemInstruction systemInstruction,
+            List<Content> contents,
+            @JsonProperty("generationConfig") GenerationConfig generationConfig
     ) {
-        record Message(String role, String content) {}
+        record SystemInstruction(List<Part> parts) {}
+        record Content(String role, List<Part> parts) {}
+        record Part(String text) {}
+        record GenerationConfig(
+                double temperature,
+                @JsonProperty("maxOutputTokens") int maxOutputTokens
+        ) {}
     }
 
-    record ChatResponse(List<Choice> choices) {
-        record Choice(Message message) {}
-        record Message(String content) {}
+    record GenerateContentResponse(List<Candidate> candidates) {
+        record Candidate(Content content) {}
+        record Content(List<Part> parts) {}
+        record Part(String text) {}
     }
 }

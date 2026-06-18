@@ -1,13 +1,14 @@
 package com.wookyeong.jangbu_agent.domain.guide.service;
 
 import com.wookyeong.jangbu_agent.domain.guide.dto.GuideContextDto;
+import com.wookyeong.jangbu_agent.domain.guide.dto.GuideResponse;
 import com.wookyeong.jangbu_agent.domain.guide.dto.PeriodSummaryResult;
 import com.wookyeong.jangbu_agent.domain.guide.dto.PurchaseCycleRow;
 import com.wookyeong.jangbu_agent.domain.guide.dto.WeekdaySalesResult;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideAnalysisMapper;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideRepository;
 import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
-import com.wookyeong.jangbu_agent.infra.ai.OpenAiClient;
+import com.wookyeong.jangbu_agent.infra.ai.GeminiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,8 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GuideService 단위 테스트")
@@ -27,7 +34,7 @@ class GuideServiceTest {
     @Mock GuideAnalysisMapper guideAnalysisMapper;
     @Mock GuideRepository guideRepository;
     @Mock UserRepository userRepository;
-    @Mock OpenAiClient openAiClient;
+    @Mock GeminiClient geminiClient;
 
     @InjectMocks GuideService guideService;
 
@@ -170,6 +177,43 @@ class GuideServiceTest {
         assertThat(result.getDaysSinceLastPurchase()).isEqualTo(8L);
         assertThat(result.getAvgCycleDays()).isNull();
         assertThat(result.getNextExpectedDate()).isNull();
+    }
+
+    // ── hasNoActivity ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("매입·매출 모두 0 — 활동 없음")
+    void hasNoActivity_zeroPurchaseAndSale_returnsTrue() {
+        GuideContextDto ctx = GuideContextDto.builder().totalPurchase(0L).totalSale(0L).build();
+        assertThat(guideService.hasNoActivity(ctx)).isTrue();
+    }
+
+    @Test
+    @DisplayName("매출만 있음 — 활동 있음")
+    void hasNoActivity_saleOnly_returnsFalse() {
+        GuideContextDto ctx = GuideContextDto.builder().totalPurchase(0L).totalSale(500_000L).build();
+        assertThat(guideService.hasNoActivity(ctx)).isFalse();
+    }
+
+    // ── getOrCreateDailyGuide (활동 없음 가드) ──────────────────────────────────
+
+    @Test
+    @DisplayName("매입·매출 데이터 없음 — Gemini 호출 없이 안내 문구만 반환, DB 저장 안 함")
+    void getOrCreateDailyGuide_noActivity_skipsAiCallAndDoesNotPersist() {
+        Integer userNo = 1;
+        when(guideRepository.findByUserUserNoAndGuideDt(eq(userNo), any())).thenReturn(Optional.empty());
+        when(guideAnalysisMapper.getSummaryByPeriod(eq(userNo), any(), any()))
+                .thenReturn(periodSummary(0L, 0L, 0L));
+        when(guideAnalysisMapper.getWeekdaySalesTrend(userNo)).thenReturn(List.of());
+        when(guideAnalysisMapper.getPurchaseCycleRows(userNo)).thenReturn(List.of());
+
+        GuideResponse response = guideService.getOrCreateDailyGuide(userNo);
+
+        assertThat(response.getGuideText()).contains("등록");
+        assertThat(response.getBasedPurchase()).isZero();
+        assertThat(response.getModelName()).isNull();
+        verify(geminiClient, never()).generateGuide(any());
+        verify(guideRepository, never()).save(any());
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────────────

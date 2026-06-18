@@ -35,7 +35,7 @@ springdoc:
   swagger-ui:
     try-it-out-enabled: true
 
-openai:
-  api-key: ${OPENAI_API_KEY:}
-  model: gpt-4o-mini
-  base-url: https://api.openai.com/v1
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: gemini-2.5-flash
+  base-url: https://generativelanguage.googleapis.com/v1beta

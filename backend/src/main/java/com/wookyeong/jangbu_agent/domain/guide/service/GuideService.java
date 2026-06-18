@@ -6,7 +6,7 @@ import com.wookyeong.jangbu_agent.domain.guide.repository.GuideAnalysisMapper;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideRepository;
 import com.wookyeong.jangbu_agent.domain.user.entity.User;
 import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
-import com.wookyeong.jangbu_agent.infra.ai.OpenAiClient;
+import com.wookyeong.jangbu_agent.infra.ai.GeminiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,17 +30,22 @@ import java.util.OptionalDouble;
 public class GuideService {
 
     private static final int ANALYSIS_PERIOD_DAYS = 28;
+    private static final String NO_ACTIVITY_GUIDE_TEXT =
+            "최근 28일간 등록된 매입·매출 내역이 없습니다. 매입과 매출을 먼저 등록해 주세요.";
 
     private final GuideAnalysisMapper guideAnalysisMapper;
     private final GuideRepository guideRepository;
     private final UserRepository userRepository;
-    private final OpenAiClient openAiClient;
+    private final GeminiClient geminiClient;
 
     /**
      * 오늘 가이드를 반환한다.
      *
      * <p>당일 캐시: DB에 오늘 레코드가 있으면 바로 반환.
-     * 없으면 집계 후 GPT 호출 → 저장 → 반환.
+     * 없으면 집계 후 Gemini 호출 → 저장 → 반환.
+     *
+     * <p>매입·매출 내역이 둘 다 없으면 해석할 데이터가 없으므로 Gemini를 호출하지 않고
+     * 안내 문구만 반환한다. 이 경우 DB에도 저장하지 않는다 (호출/저장 비용 모두 회피).
      */
     @Transactional
     public GuideResponse getOrCreateDailyGuide(Integer userNo) {
@@ -52,7 +57,20 @@ public class GuideService {
         }
 
         GuideContextDto context = analyze(userNo);
-        String guideText = openAiClient.generateGuide(context);
+        if (hasNoActivity(context)) {
+            return GuideResponse.builder()
+                    .guideDt(today)
+                    .guideText(NO_ACTIVITY_GUIDE_TEXT)
+                    .basedPurchase(0L)
+                    .basedSale(0L)
+                    .basedExpense(0L)
+                    .basedProfit(0L)
+                    .marginRate(null)
+                    .modelName(null)
+                    .build();
+        }
+
+        String guideText = geminiClient.generateGuide(context);
 
         User userRef = userRepository.getReferenceById(userNo);
         DailyGuide guide = DailyGuide.builder()
@@ -63,7 +81,7 @@ public class GuideService {
                 .basedSale(context.getTotalSale())
                 .basedExpense(context.getTotalExpense())
                 .basedProfit(context.getNetProfit())
-                .modelName(openAiClient.getModelName())
+                .modelName(geminiClient.getModelName())
                 .build();
 
         return toResponse(guideRepository.save(guide));
@@ -85,6 +103,11 @@ public class GuideService {
     }
 
     // ── 계산 로직 (package-private — 단위 테스트 직접 호출용) ─────────────────
+
+    /** 최근 28일간 매입·매출이 모두 0이면 해석할 데이터가 없는 것으로 본다. */
+    boolean hasNoActivity(GuideContextDto ctx) {
+        return ctx.getTotalPurchase() == 0 && ctx.getTotalSale() == 0;
+    }
 
     GuideContextDto buildContext(PeriodSummaryResult summary,
                                  List<WeekdaySalesResult> weekdayTrend,
