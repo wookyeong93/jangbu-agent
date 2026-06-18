@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wookyeong.jangbu_agent.domain.guide.repository.GuideAnalysisMapper">
+
+    <!--
+        Query 1: 기간별 매입/매출/지출/순익 합계.
+        인덱스: idx_ledger_02 (user_no, trx_type, trx_date) — 조건 순서 일치.
+    -->
+    <select id="getSummaryByPeriod"
+            resultType="com.wookyeong.jangbu_agent.domain.guide.dto.PeriodSummaryResult">
+        SELECT
+            SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END) AS totalPurchase,
+            SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END) AS totalSale,
+            SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END) AS totalExpense,
+            SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END)
+            - SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END)
+            - SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END) AS netProfit
+        FROM tb_ledger
+        WHERE user_no  = #{userNo}
+          AND trx_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <!--
+        Query 2: 요일별 평균 매출 (최근 8주).
+        서브쿼리에서 일별 합산 후 요일 기준으로 평균 → avgSale 내림차순.
+        인덱스: idx_ledger_02 (user_no, trx_type, trx_date).
+    -->
+    <select id="getWeekdaySalesTrend"
+            resultType="com.wookyeong.jangbu_agent.domain.guide.dto.WeekdaySalesResult">
+        SELECT
+            EXTRACT(DOW FROM trx_date)::int AS dow,
+            ROUND(AVG(daily_total))         AS avgSale
+        FROM (
+            SELECT trx_date, SUM(amount) AS daily_total
+            FROM tb_ledger
+            WHERE user_no  = #{userNo}
+              AND trx_type = 'SALE'
+              AND trx_date <![CDATA[>=]]> CURRENT_DATE - INTERVAL '8 weeks'
+            GROUP BY trx_date
+        ) daily
+        GROUP BY dow
+        ORDER BY avgSale DESC
+    </select>
+
+    <!--
+        Query 3: 최근 10건 매입 날짜와 직전 매입 대비 경과 일수 (윈도우 함수 LAG).
+        서비스 레이어에서 평균 주기·다음 예상 매입일을 계산한다.
+        첫 번째 행의 prevDate·gapDays 는 null.
+    -->
+    <select id="getPurchaseCycleRows"
+            resultType="com.wookyeong.jangbu_agent.domain.guide.dto.PurchaseCycleRow">
+        SELECT
+            trx_date                                               AS trxDate,
+            LAG(trx_date) OVER (ORDER BY trx_date)                AS prevDate,
+            trx_date - LAG(trx_date) OVER (ORDER BY trx_date)     AS gapDays
+        FROM (
+            SELECT DISTINCT trx_date
+            FROM tb_ledger
+            WHERE user_no  = #{userNo}
+              AND trx_type = 'PURCHASE'
+            ORDER BY trx_date
+        ) purchases
+        ORDER BY trxDate DESC
+        LIMIT 10
+    </select>
+
+</mapper>
