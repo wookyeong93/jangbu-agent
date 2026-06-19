@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 @Component
 public class GuideGuardrail {
 
-    private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?");
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d[\\d,]*(?:\\.\\d+)?");
 
     /** 컨텍스트에 없는 숫자(2자리 이상)를 모두 찾아 반환한다. 비어있으면 안전한 응답이다. */
     public Set<String> findViolations(String guideText, GuideContextDto ctx) {
@@ -29,12 +29,16 @@ public class GuideGuardrail {
 
         Matcher matcher = NUMBER_PATTERN.matcher(guideText);
         while (matcher.find()) {
-            String token = matcher.group().replace(",", "");
+            String raw = matcher.group();
+            if (raw.endsWith(",")) {
+                raw = raw.substring(0, raw.length() - 1);
+            }
+            String token = raw.replace(",", "");
             if (token.replace(".", "").length() < 2) {
                 continue;
             }
             if (!allowed.contains(token)) {
-                violations.add(matcher.group());
+                violations.add(raw);
             }
         }
         return violations;
@@ -42,6 +46,7 @@ public class GuideGuardrail {
 
     private Set<String> allowedNumbers(GuideContextDto ctx) {
         Set<String> allowed = new HashSet<>();
+        allowed.add(String.valueOf(ctx.getAnalysisPeriodDays()));
         allowed.add(String.valueOf(ctx.getTotalPurchase()));
         allowed.add(String.valueOf(ctx.getTotalSale()));
         allowed.add(String.valueOf(ctx.getTotalExpense()));

@@ -18,7 +18,10 @@ import java.util.List;
 @Schema(description = "AI 가이드 생성용 집계 컨텍스트")
 public class GuideContextDto {
 
-    // ── 기간 요약 (최근 28일) ──────────────────────────────────────────────────
+    // ── 기간 요약 ──────────────────────────────────────────────────────────────
+
+    @Schema(description = "집계 기간(일). 프롬프트·Guardrail이 함께 참조하는 기준값", example = "28")
+    private int analysisPeriodDays;
 
     @Schema(description = "기간 내 총 매입 금액", example = "1200000")
     private long totalPurchase;

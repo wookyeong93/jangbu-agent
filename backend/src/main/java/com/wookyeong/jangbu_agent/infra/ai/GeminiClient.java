@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Gemini generateContent API 클라이언트.
@@ -45,7 +46,8 @@ public class GeminiClient {
                         List.of(new GenerateContentRequest.Part(SYSTEM_PROMPT))),
                 List.of(new GenerateContentRequest.Content(
                         "user", List.of(new GenerateContentRequest.Part(buildUserPrompt(ctx))))),
-                new GenerateContentRequest.GenerationConfig(0.3, 600)
+                new GenerateContentRequest.GenerationConfig(
+                        0.3, 600, new GenerateContentRequest.ThinkingConfig(0))
         );
 
         GenerateContentResponse response = restClient.post()
@@ -58,7 +60,16 @@ public class GeminiClient {
         if (response == null || response.candidates().isEmpty()) {
             throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
         }
-        return response.candidates().get(0).content().parts().get(0).text();
+
+        String text = response.candidates().get(0).content().parts().stream()
+                .filter(part -> !Boolean.TRUE.equals(part.thought()))
+                .map(GenerateContentResponse.Part::text)
+                .collect(Collectors.joining());
+
+        if (text.isBlank()) {
+            throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
+        }
+        return text;
     }
 
     public String getModelName() {
@@ -68,7 +79,7 @@ public class GeminiClient {
     private String buildUserPrompt(GuideContextDto ctx) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("[최근 28일 요약]\n");
+        sb.append("[최근 ").append(ctx.getAnalysisPeriodDays()).append("일 요약]\n");
         sb.append("총매입: ").append(String.format("%,d", ctx.getTotalPurchase())).append("원 | ");
         sb.append("총매출: ").append(String.format("%,d", ctx.getTotalSale())).append("원 | ");
         sb.append("총지출: ").append(String.format("%,d", ctx.getTotalExpense())).append("원 | ");
@@ -113,13 +124,15 @@ public class GeminiClient {
         record Part(String text) {}
         record GenerationConfig(
                 double temperature,
-                @JsonProperty("maxOutputTokens") int maxOutputTokens
+                @JsonProperty("maxOutputTokens") int maxOutputTokens,
+                @JsonProperty("thinkingConfig") ThinkingConfig thinkingConfig
         ) {}
+        record ThinkingConfig(@JsonProperty("thinkingBudget") int thinkingBudget) {}
     }
 
     record GenerateContentResponse(List<Candidate> candidates) {
         record Candidate(Content content) {}
         record Content(List<Part> parts) {}
-        record Part(String text) {}
+        record Part(String text, Boolean thought) {}
     }
 }

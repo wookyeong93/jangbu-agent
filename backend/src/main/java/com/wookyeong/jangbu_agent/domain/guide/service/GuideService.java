@@ -148,6 +148,7 @@ public class GuideService {
                         * 1000.0 / summary.getTotalPurchase()) / 10.0;
 
         return GuideContextDto.builder()
+                .analysisPeriodDays(ANALYSIS_PERIOD_DAYS)
                 .totalPurchase(summary.getTotalPurchase())
                 .totalSale(summary.getTotalSale())
                 .totalExpense(summary.getTotalExpense())
