@@ -3,7 +3,7 @@
 ## 스택
 - Java 25, Spring Boot 4, PostgreSQL
 - 인증: Spring Security + JWT (user_no 기준 장부 격리)
-- LLM: OpenAI API (해석/조언 생성에만)
+- LLM: Gemini API (해석/조언 생성에만, 무료 티어 — ADR-0004)
 
 ## 영속성 — 이 분기 규칙을 반드시 지킬 것
 - 단순 CRUD, 타입세이프 동적 쿼리 → JPA + QueryDSL
