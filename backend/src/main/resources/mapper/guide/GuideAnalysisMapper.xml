@@ -11,12 +11,14 @@
     <select id="getSummaryByPeriod"
             resultType="com.wookyeong.jangbu_agent.domain.guide.dto.PeriodSummaryResult">
         SELECT
-            SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END) AS totalPurchase,
-            SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END) AS totalSale,
-            SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END) AS totalExpense,
-            SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END)
-            - SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END)
-            - SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END) AS netProfit
+            COALESCE(SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END), 0) AS totalPurchase,
+            COALESCE(SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END), 0) AS totalSale,
+            COALESCE(SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END), 0) AS totalExpense,
+            COALESCE(
+                SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END)
+            , 0) AS netProfit
         FROM tb_ledger
         WHERE user_no  = #{userNo}
           AND trx_date BETWEEN #{startDate} AND #{endDate}
