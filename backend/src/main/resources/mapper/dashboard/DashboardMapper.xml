@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wookyeong.jangbu_agent.domain.dashboard.repository.DashboardMapper">
+
+    <!--
+        Query 1: 기간(보통 당월) 매입/매출/지출/순익 합계.
+        인덱스: idx_ledger_02 (user_no, trx_type, trx_date) — 조건 순서 일치.
+    -->
+    <select id="getSummaryByPeriod"
+            resultType="com.wookyeong.jangbu_agent.domain.dashboard.dto.MonthlySummaryResult">
+        SELECT
+            COALESCE(SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END), 0) AS totalPurchase,
+            COALESCE(SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END), 0) AS totalSale,
+            COALESCE(SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END), 0) AS totalExpense,
+            COALESCE(
+                SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END)
+            , 0) AS netProfit
+        FROM tb_ledger
+        WHERE user_no  = #{userNo}
+          AND trx_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <!--
+        Query 2: 기간 내 월별 매입/매출/지출/순익 집계 (연·월 GROUP BY).
+        활동이 있는 달만 행이 생성된다 — 빈 달은 서비스/프론트에서 필요 시 보완.
+        인덱스: idx_ledger_02 (user_no, trx_type, trx_date).
+    -->
+    <select id="getMonthlyTrend"
+            resultType="com.wookyeong.jangbu_agent.domain.dashboard.dto.MonthlyTrendRow">
+        SELECT
+            EXTRACT(YEAR FROM trx_date)::int  AS year,
+            EXTRACT(MONTH FROM trx_date)::int AS month,
+            COALESCE(SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END), 0) AS totalPurchase,
+            COALESCE(SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END), 0) AS totalSale,
+            COALESCE(SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END), 0) AS totalExpense,
+            COALESCE(
+                SUM(CASE WHEN trx_type = 'SALE'     THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'PURCHASE' THEN amount ELSE 0 END)
+                - SUM(CASE WHEN trx_type = 'EXPENSE'  THEN amount ELSE 0 END)
+            , 0) AS netProfit
+        FROM tb_ledger
+        WHERE user_no  = #{userNo}
+          AND trx_date BETWEEN #{startDate} AND #{endDate}
+        GROUP BY EXTRACT(YEAR FROM trx_date), EXTRACT(MONTH FROM trx_date)
+        ORDER BY year, month
+    </select>
+
+</mapper>
