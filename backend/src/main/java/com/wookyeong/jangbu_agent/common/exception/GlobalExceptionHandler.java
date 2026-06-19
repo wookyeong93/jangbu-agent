@@ -2,12 +2,15 @@ package com.wookyeong.jangbu_agent.common.exception;
 
 import com.wookyeong.jangbu_agent.common.response.ApiResponse;
 import com.wookyeong.jangbu_agent.common.response.ErrorCode;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -17,7 +20,10 @@ import java.util.stream.Collectors;
  * <p>처리 우선순위:
  * <ol>
  *   <li>{@link BusinessException} — 도메인 규칙 위반. ErrorCode 의 HTTP 상태로 응답.
- *   <li>{@link MethodArgumentNotValidException} — @Valid 검증 실패. 필드별 메시지를 합쳐 400 응답.
+ *   <li>{@link MethodArgumentNotValidException} — {@code @Valid} 바디 검증 실패. 필드별 메시지를 합쳐 400 응답.
+ *   <li>{@link ConstraintViolationException} — {@code @RequestParam}/{@code @PathVariable}에 건
+ *       {@code @Min}/{@code @Max} 등 검증 실패 ({@code @Validated} 컨트롤러). 400 응답.
+ *   <li>{@link MethodArgumentTypeMismatchException} — 쿼리 파라미터 타입 불일치(예: int에 문자열). 400 응답.
  *   <li>{@link Exception} — 그 외 모든 예외. 상세 내용은 로그에만 남기고 500 응답.
  * </ol>
  *
@@ -41,6 +47,24 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
         log.warn("ValidationException: {}", message);
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining(", "));
+        log.warn("ConstraintViolationException: {}", message);
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        String message = "'%s' 파라미터 값이 올바르지 않습니다.".formatted(e.getName());
+        log.warn("MethodArgumentTypeMismatchException: {}", message);
         return ResponseEntity.badRequest()
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
     }
