@@ -3,6 +3,18 @@ definePageMeta({ title: '스타일 가이드' })
 
 const text = ref('')
 const textWithError = ref('')
+
+// 데모용 임시 옵션 — 실제 공통코드(trx_type 등)는 장부 폼 작업에서 codes API로 연동
+const DEMO_OPTIONS = [
+  { value: 'A', label: '옵션 A' },
+  { value: 'B', label: '옵션 B' },
+  { value: 'C', label: '옵션 C' }
+]
+
+const selectValue = ref('A')
+const radioValue = ref('A')
+const toggleValue = ref(false)
+const dateValue = ref('2026-06-20')
 </script>
 
 <template>
@@ -28,6 +40,36 @@ const textWithError = ref('')
         type="password"
         error="비밀번호가 올바르지 않습니다."
       />
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-sm font-semibold text-[var(--color-text-muted)]">SelectBox</h2>
+      <AppSelectBox
+        v-model="selectValue"
+        id="select-demo"
+        label="구분"
+        :options="DEMO_OPTIONS"
+      />
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-sm font-semibold text-[var(--color-text-muted)]">RadioBox</h2>
+      <AppRadioGroup
+        v-model="radioValue"
+        name="radioDemo"
+        label="구분"
+        :options="DEMO_OPTIONS"
+      />
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-sm font-semibold text-[var(--color-text-muted)]">Toggle</h2>
+      <AppToggle v-model="toggleValue" label="알림 받기" />
+    </section>
+
+    <section class="space-y-2">
+      <h2 class="text-sm font-semibold text-[var(--color-text-muted)]">DatePicker</h2>
+      <AppDatePicker v-model="dateValue" id="date-demo" label="거래일자" />
     </section>
   </div>
 </template>
