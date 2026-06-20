@@ -62,6 +62,21 @@ com.wookyeong.jangbu_agent
 - `common`과 `infra`는 도메인에 의존하지 않는다. 도메인이 `common`을 사용한다.
 - 도메인 간 직접 의존은 금지. 공유 데이터가 필요하면 `common` 경유 또는 ID 참조만 허용.
 
+## API 응답 — HTTP 상태코드 컨벤션
+> 상세 배경: [ADR-0006](../docs/adr/0006-http-status-convention.md)
+
+- **인증·인가 실패(401/403)**, **서버·인프라 오류(500)** 만 실제 HTTP 상태코드로 응답한다.
+- 그 외 모든 비즈니스 로직 결과(리소스 없음, 중복 충돌, 로그인 시도 결과 등)는 HTTP `200` +
+  `ApiResponse{ success: false, error: { code, message } }` 로 응답한다. 새 `ErrorCode`를 추가할 때
+  이 기준으로 `HttpStatus`를 정할 것 — 임의로 404/409 등을 쓰지 않는다.
+- "요청 형식 자체가 잘못됨"(Bean Validation 실패, 타입 불일치)은 `400`을 유지한다 — 인증/인가/서버
+  오류는 아니지만 클라이언트가 보낸 요청 자체가 처리 불가능한 형태였다는 의미라 예외로 둔다.
+- JWT는 유효하지만 참조하는 사용자가 그 사이 삭제된 경우(FK 참조 실패)는 `existsById`로 사전
+  확인해 `ErrorCode.FORBIDDEN`(403)을 명시적으로 던질 것. `getReferenceById`의 지연 로딩에 맡겨
+  의도치 않은 500이 나가지 않게 한다.
+- Spring Security가 `DispatcherServlet` 진입 전에 직접 막는 401(미인증)은 `GlobalExceptionHandler`를
+  거치지 않아 `ApiResponse` 포맷이 아니다 — 현재 의도된 예외이며 통일 대상이 아니다.
+
 ## Observability
 
 ### 목표
