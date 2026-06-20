@@ -1,5 +1,7 @@
 package com.wookyeong.jangbu_agent.domain.guide.service;
 
+import com.wookyeong.jangbu_agent.common.exception.BusinessException;
+import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.guide.dto.*;
 import com.wookyeong.jangbu_agent.domain.guide.entity.DailyGuide;
 import com.wookyeong.jangbu_agent.domain.guide.repository.GuideAnalysisMapper;
@@ -94,6 +96,12 @@ public class GuideService {
                     .marginRate(context.getMarginRate())
                     .modelName(null)
                     .build();
+        }
+
+        // JWT는 유효하지만 그 사이 계정이 삭제된 경우 — getReferenceById 의 지연 로딩에 맡기면
+        // 커밋 시점에 EntityNotFoundException(500)으로 떨어지므로 미리 확인해 403으로 처리 (ADR-0006).
+        if (!userRepository.existsById(userNo)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "사용자 정보를 확인할 수 없습니다.");
         }
 
         User userRef = userRepository.getReferenceById(userNo);

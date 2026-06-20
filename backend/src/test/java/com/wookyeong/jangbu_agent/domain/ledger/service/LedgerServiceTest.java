@@ -47,6 +47,7 @@ class LedgerServiceTest {
         User user = User.builder().userNo(USER_NO).userId("u1").userPwd("pw").build();
         Ledger saved = buildLedger(10L, user, "PURCHASE", LocalDate.now(), null, 5000L);
 
+        given(userRepository.existsById(USER_NO)).willReturn(true);
         given(userRepository.getReferenceById(USER_NO)).willReturn(user);
         given(ledgerRepository.save(any())).willReturn(saved);
 
@@ -55,6 +56,19 @@ class LedgerServiceTest {
 
         assertThat(result.getTrxType()).isEqualTo("PURCHASE");
         assertThat(result.getAmount()).isEqualTo(5000L);
+    }
+
+    @Test
+    @DisplayName("JWT는 유효하지만 그 사이 계정이 삭제된 경우 — FORBIDDEN (ADR-0006)")
+    void create_userNoLongerExists_throwsForbidden() {
+        given(userRepository.existsById(USER_NO)).willReturn(false);
+
+        LedgerCreateRequest req = makeCreateRequest("PURCHASE", 5000L, null, null);
+
+        assertThatThrownBy(() -> ledgerService.create(USER_NO, req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
     }
 
     @Test

@@ -117,8 +117,8 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 사용자면 USER_NOT_FOUND")
-    void updateProfile_userNotFound_throwsException() {
+    @DisplayName("JWT는 유효하지만 그 사이 계정이 삭제된 경우 — FORBIDDEN (ADR-0006)")
+    void updateProfile_userNotFound_throwsForbidden() {
         given(userRepository.findById(99)).willReturn(Optional.empty());
 
         UpdateProfileRequest request = makeRequest("홍길동", null, null);
@@ -126,7 +126,7 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.updateProfile(99, request))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+                .isEqualTo(ErrorCode.FORBIDDEN);
     }
 
     // ── 헬퍼 ──────────────────────────────────────────────────────────────────

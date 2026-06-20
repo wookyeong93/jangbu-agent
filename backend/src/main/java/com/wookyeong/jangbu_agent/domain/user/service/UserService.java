@@ -33,8 +33,9 @@ public class UserService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
+        // JWT는 유효하지만 그 사이 계정이 삭제된 경우 — 인증된 세션이 가리키는 대상이 없으므로 403 (ADR-0006).
         User user = userRepository.findById(userNo)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN, "사용자 정보를 확인할 수 없습니다."));
 
         if (hasNm) {
             user.updateUserNm(request.getUserNm());

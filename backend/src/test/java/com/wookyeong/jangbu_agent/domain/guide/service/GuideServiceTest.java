@@ -1,5 +1,7 @@
 package com.wookyeong.jangbu_agent.domain.guide.service;
 
+import com.wookyeong.jangbu_agent.common.exception.BusinessException;
+import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.guide.dto.GuideContextDto;
 import com.wookyeong.jangbu_agent.domain.guide.dto.GuideResponse;
 import com.wookyeong.jangbu_agent.domain.guide.dto.PeriodSummaryResult;
@@ -22,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -236,6 +239,25 @@ class GuideServiceTest {
         assertThat(response.getBasedPurchase()).isEqualTo(1_200_000L);
         assertThat(response.getModelName()).isNull();
         verify(guideRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("JWT는 유효하지만 그 사이 계정이 삭제된 경우 — FORBIDDEN (ADR-0006)")
+    void getOrCreateDailyGuide_userNoLongerExists_throwsForbidden() {
+        Integer userNo = 1;
+        when(guideRepository.findByUserUserNoAndGuideDt(eq(userNo), any())).thenReturn(Optional.empty());
+        when(guideAnalysisMapper.getSummaryByPeriod(eq(userNo), any(), any()))
+                .thenReturn(periodSummary(1_200_000L, 980_000L, 150_000L));
+        when(guideAnalysisMapper.getWeekdaySalesTrend(userNo)).thenReturn(List.of());
+        when(guideAnalysisMapper.getPurchaseCycleRows(userNo)).thenReturn(List.of());
+        when(geminiClient.generateGuide(any())).thenReturn("정상 가이드 텍스트입니다.");
+        when(guideGuardrail.findViolations(any(), any())).thenReturn(Set.of());
+        when(userRepository.existsById(userNo)).thenReturn(false);
+
+        assertThatThrownBy(() -> guideService.getOrCreateDailyGuide(userNo))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────────────
