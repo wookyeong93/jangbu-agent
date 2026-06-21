@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { SelectOption } from '~/types/code'
+
 defineOptions({ inheritAttrs: false })
 
 defineProps<{
   modelValue: string
-  options: { value: string; label: string }[]
+  options: SelectOption[]
   label?: string
   placeholder?: string
   error?: string

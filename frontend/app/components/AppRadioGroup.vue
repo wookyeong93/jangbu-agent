@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { SelectOption } from '~/types/code'
+
 defineProps<{
   modelValue: string
-  options: { value: string; label: string }[]
+  options: SelectOption[]
   name: string
   label?: string
 }>()
