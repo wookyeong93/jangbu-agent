@@ -4,9 +4,15 @@
 - 기존 `ErrorCode`는 `NOT_FOUND`(404), `USER_ID_DUPLICATED`(409), `SAME_AS_CURRENT_PASSWORD`(400) 등
   도메인 결과별로 다양한 HTTP 상태를 사용했음. 프론트엔드에서 분기가 늘어나고 일관성이 떨어짐.
 - 전체 백엔드 스캔 결과 추가로 확인된 사항:
-  - Spring Security가 미인증 요청을 401로 막는 경로는 `DispatcherServlet` 진입 전이라
-    `GlobalExceptionHandler`(`@RestControllerAdvice`)를 거치지 않음 — 이번 컨벤션 적용 대상에서 제외
-    (별도 검토 필요 시 재논의).
+  - Spring Security가 미인증 요청을 막는 경로는 `DispatcherServlet` 진입 전이라
+    `GlobalExceptionHandler`(`@RestControllerAdvice`)를 거치지 않음. 게다가 별도
+    `AuthenticationEntryPoint`를 지정하지 않으면 Spring Security 기본값
+    (`Http403ForbiddenEntryPoint`)이 미인증 요청도 403으로 응답해버려 — 토큰이 전혀
+    없거나 위조된 요청도 403이 나가고 있었음 (코드 주석은 401을 가정했지만 실제로는
+    한 번도 401을 낸 적이 없었음). "재인증하면 통과될 수 있다(401)"와 "유효한 인증으로도
+    거부된다(403)"의 의미가 섞여 프론트의 401-재발급 컨벤션이 동작할 수 없는 상태였음.
+    → `RestAuthenticationEntryPoint` 추가로 해결 (아래 결정 참고). 이제 미인증 요청은
+    401 + `ApiResponse` 포맷으로 응답한다 — 포맷 통일까지 같이 해결됨.
   - 의도치 않게 500으로 떨어지는 케이스: `GeminiClient`(Gemini 응답 비어있음),
     `JwtTokenProvider.hashToken`(SHA-256 알고리즘 사용 불가 — 환경 문제, 500 유지가 맞음),
     `LedgerService`/`GuideService`/`UserService`의 FK 참조(JWT는 유효하지만 그 사이 계정이
@@ -23,6 +29,8 @@
 - **JWT는 유효하지만 참조하는 사용자가 더 이상 존재하지 않는 경우** (FK 참조 실패) → `existsById`로
   사전 확인해 `ErrorCode.FORBIDDEN`(403)을 명시적으로 던진다. 적용 대상: `LedgerService.create`,
   `GuideService.getOrCreateDailyGuide`, `UserService.updateProfile`(기존 `USER_NOT_FOUND` 대체).
+- **미인증 요청** (토큰 없음·위조·만료) → `RestAuthenticationEntryPoint`가 401 +
+  `ApiResponse` 포맷으로 명시 응답 (Spring Security 기본값인 403 폴백 대신).
 - **서버·인프라 오류** (500) → 그대로 유지.
 - **그 외 모든 비즈니스 로직 결과** (리소스 없음, 중복 충돌, 로그인 시도 결과, 비밀번호 확인 결과 등
   "요청은 정상인데 결과가 부정적인 경우") → HTTP `200` + `{ success: false, error: { code, message } }`.
@@ -61,8 +69,8 @@
 - (+) 실제 장애(401/403/500)는 여전히 상태코드로 구분 가능 — 모니터링·프록시 영향 없음
 - (+) FK 참조 실패가 의도치 않은 500이 아니라 명시적 403으로 정리됨, `USER_NOT_FOUND`의
       의미 혼용도 해소됨
+- (+) 미인증 요청이 실제로 401을 내려보내게 됨 (이전엔 항상 403) — 프론트의
+      "401이면 토큰 재발급 시도" 컨벤션이 정상 동작, 응답 포맷도 `ApiResponse`로 통일됨
 - (-) REST 표준 관행(404/409 등)과 다름 — 외부 공개 API라면 부적합할 수 있음. 내부용 토이
       프로젝트 범위에서는 허용
 - (-) 기존 `LEDGER_NOT_FOUND` 등을 기대하던 테스트·클라이언트 코드 전부 수정 필요
-- (-) Spring Security 401(미인증 차단)의 응답 포맷 통일은 이번 범위에서 제외 — 상태코드 401은
-      유지되지만 `ApiResponse` 포맷이 아님. 필요 시 별도 ADR로 재논의

@@ -29,7 +29,10 @@ import java.util.List;
  * </ul>
  *
  * <p>세션 미사용 (Stateless), CSRF 비활성화 (REST API + JWT 조합).
- * 인증 실패 시 Spring Security 기본 동작(401)을 그대로 사용한다.
+ * 인증 실패(토큰 없음·위조·만료)는 {@link RestAuthenticationEntryPoint}가 401 +
+ * {@code ApiResponse} 포맷으로 응답한다 — entry point를 지정하지 않으면 Spring
+ * Security 기본값({@code Http403ForbiddenEntryPoint})이 403을 내려보내 "재인증하면
+ * 통과될 수 있다(401)"는 의미와 "유효한 인증으로도 거부된다(403)"는 의미가 섞인다.
  *
  * <p>CORS: 프론트(Nuxt dev 서버, localhost:3000)에서 cross-origin으로 호출하고
  * refresh token을 httpOnly 쿠키로 주고받으므로 {@code allowCredentials(true)} 필수
@@ -42,6 +45,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -50,6 +54,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
