@@ -3,6 +3,7 @@ package com.wookyeong.jangbu_agent.domain.user.service;
 import com.wookyeong.jangbu_agent.common.exception.BusinessException;
 import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.user.dto.UpdateProfileRequest;
+import com.wookyeong.jangbu_agent.domain.user.dto.UserResponse;
 import com.wookyeong.jangbu_agent.domain.user.entity.User;
 import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +28,31 @@ class UserServiceTest {
     @Mock PasswordEncoder passwordEncoder;
 
     @InjectMocks UserService userService;
+
+    // ── 내 프로필 조회 ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("내 프로필 조회 성공")
+    void getProfile_success() {
+        User user = User.builder().userNo(1).userId("user01").userPwd("encoded").userNm("홍길동").build();
+        given(userRepository.findById(1)).willReturn(Optional.of(user));
+
+        UserResponse response = userService.getProfile(1);
+
+        assertThat(response.getUserId()).isEqualTo("user01");
+        assertThat(response.getUserNm()).isEqualTo("홍길동");
+    }
+
+    @Test
+    @DisplayName("내 프로필 조회 — JWT는 유효하지만 그 사이 계정이 삭제된 경우 FORBIDDEN (ADR-0006)")
+    void getProfile_userNotFound_throwsForbidden() {
+        given(userRepository.findById(99)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getProfile(99))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
 
     // ── 이름 변경 ──────────────────────────────────────────────────────────────
 

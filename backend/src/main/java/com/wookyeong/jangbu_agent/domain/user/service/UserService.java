@@ -3,6 +3,7 @@ package com.wookyeong.jangbu_agent.domain.user.service;
 import com.wookyeong.jangbu_agent.common.exception.BusinessException;
 import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.user.dto.UpdateProfileRequest;
+import com.wookyeong.jangbu_agent.domain.user.dto.UserResponse;
 import com.wookyeong.jangbu_agent.domain.user.entity.User;
 import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,15 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Transactional(readOnly = true)
+    public UserResponse getProfile(Integer userNo) {
+        User user = findOwnedUser(userNo);
+        return UserResponse.builder()
+                .userId(user.getUserId())
+                .userNm(user.getUserNm())
+                .build();
+    }
+
     public void updateProfile(Integer userNo, UpdateProfileRequest request) {
         boolean hasNm = StringUtils.hasText(request.getUserNm());
         boolean hasPw = StringUtils.hasText(request.getNewPassword());
@@ -33,9 +43,7 @@ public class UserService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        // JWT는 유효하지만 그 사이 계정이 삭제된 경우 — 인증된 세션이 가리키는 대상이 없으므로 403 (ADR-0006).
-        User user = userRepository.findById(userNo)
-                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN, "사용자 정보를 확인할 수 없습니다."));
+        User user = findOwnedUser(userNo);
 
         if (hasNm) {
             user.updateUserNm(request.getUserNm());
@@ -53,5 +61,11 @@ public class UserService {
             }
             user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
         }
+    }
+
+    /** JWT는 유효하지만 그 사이 계정이 삭제된 경우 — 인증된 세션이 가리키는 대상이 없으므로 403 (ADR-0006). */
+    private User findOwnedUser(Integer userNo) {
+        return userRepository.findById(userNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN, "사용자 정보를 확인할 수 없습니다."));
     }
 }
