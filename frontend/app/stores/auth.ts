@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
+import { API_TIMEOUT_MS, isNetworkError, NETWORK_ERROR_MESSAGE } from '~/types/api'
 import type { ApiResponse } from '~/types/api'
-import type { TokenResponse, UserResponse } from '~/types/auth'
+import type { LoginRequest, TokenResponse, UserResponse } from '~/types/auth'
 
 /**
  * accessToken은 메모리에만 보관 (새로고침하면 사라짐 — refresh token httpOnly 쿠키로
- * 재발급받아 복구하는 흐름은 앱 진입 시점 초기화 로직에서 처리할 것, 아직 미구현).
+ * 재발급받아 복구하는 흐름은 middleware/auth.global.ts 에서 라우트 진입마다 처리한다).
  */
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null)
@@ -14,12 +15,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(userId: string, password: string) {
     const config = useRuntimeConfig()
-    const res = await $fetch<ApiResponse<TokenResponse>>('/api/auth/login', {
-      method: 'POST',
-      baseURL: config.public.apiBase,
-      credentials: 'include',
-      body: { userId, password }
-    })
+    const body: LoginRequest = { userId, password }
+    let res: ApiResponse<TokenResponse>
+    try {
+      res = await $fetch<ApiResponse<TokenResponse>>('/api/auth/login', {
+        method: 'POST',
+        baseURL: config.public.apiBase,
+        credentials: 'include',
+        timeout: API_TIMEOUT_MS,
+        body
+      })
+    } catch (err) {
+      throw new Error(isNetworkError(err) ? NETWORK_ERROR_MESSAGE : '로그인에 실패했습니다.')
+    }
 
     if (!res.success || !res.data) {
       throw new Error(res.error?.message ?? '로그인에 실패했습니다.')
@@ -35,7 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Access Token 만료 시 1회 시도. Refresh Token도 만료/무효면 세션 전체 만료로 보고
-   * 상태를 초기화한다 (로그인 페이지로의 리다이렉트는 아직 미구현 — 로그인 폼 작업에서 추가).
+   * 상태를 초기화한다. 로그인 페이지로의 리다이렉트는 호출부(middleware/useApiFetch)에서
+   * 반환값(false)을 보고 처리한다.
    */
   async function refreshAccessToken(): Promise<boolean> {
     try {
@@ -43,7 +52,8 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await $fetch<ApiResponse<TokenResponse>>('/api/auth/refresh', {
         method: 'POST',
         baseURL: config.public.apiBase,
-        credentials: 'include'
+        credentials: 'include',
+        timeout: API_TIMEOUT_MS
       })
       if (res.success && res.data) {
         accessToken.value = res.data.accessToken

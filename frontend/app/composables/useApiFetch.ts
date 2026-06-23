@@ -1,9 +1,9 @@
 import type { ApiResponse } from '~/types/api'
-import { ApiError } from '~/types/api'
+import { API_TIMEOUT_MS, ApiError, NETWORK_ERROR_MESSAGE, isNetworkError } from '~/types/api'
 
 interface UseApiFetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  body?: unknown
+  body?: Record<string, unknown>
   query?: Record<string, unknown>
 }
 
@@ -15,8 +15,9 @@ interface UseApiFetchOptions {
  * 재발급 자체를 수행하는 호출은 stores/auth.ts 에서 $fetch 로 직접 처리한다
  * (이 함수가 다시 401 → refresh → 이 함수를 호출하는 순환을 피하기 위함).
  *
- * <p>401 은 Spring Security가 직접 막는 경로라 ApiResponse 포맷이 아닐 수 있다
- * (ADR-0006 알려진 갭) — 그래서 상태코드만으로 재발급 트리거를 판단한다.
+ * <p>401 은 Spring Security가 직접 막는 경로지만, RestAuthenticationEntryPoint(백엔드)가
+ * ApiResponse 포맷으로 응답하며 만료(U005)와 그 외 무효 사유(C002 등)를 error.code로 구분해
+ * 내려준다 — 그래서 상태코드만이 아니라 error.code === 'U005' 일 때만 재발급을 시도한다.
  */
 export async function useApiFetch<T>(path: string, options: UseApiFetchOptions = {}): Promise<T> {
   const config = useRuntimeConfig()
@@ -26,6 +27,7 @@ export async function useApiFetch<T>(path: string, options: UseApiFetchOptions =
     const res = await $fetch<ApiResponse<T>>(path, {
       baseURL: config.public.apiBase,
       credentials: 'include',
+      timeout: API_TIMEOUT_MS,
       method: options.method ?? 'GET',
       body: options.body,
       query: options.query,
@@ -41,14 +43,27 @@ export async function useApiFetch<T>(path: string, options: UseApiFetchOptions =
   try {
     return await call()
   } catch (err: any) {
-    const status = err?.response?.status
+    // call() 안에서 이미 던진 ApiError(success:false, 비즈니스 로직 실패)는 그대로 전달.
+    if (err instanceof ApiError) {
+      throw err
+    }
 
-    // 액세스 토큰 만료로 보이는 401 만 재발급 시도. 403(권한 없음 등)은 재시도해도 안 풀리므로 그대로 던짐.
-    if (status === 401 && auth.accessToken) {
+    // 응답 자체를 못 받은 경우(네트워크 끊김·서버 다운·timeout) — 재발급 시도 의미 없이 바로 안내.
+    if (isNetworkError(err)) {
+      throw new ApiError({ code: 'NETWORK_ERROR', message: NETWORK_ERROR_MESSAGE })
+    }
+
+    const status = err?.response?.status
+    const code = err?.data?.error?.code
+
+    // 액세스 토큰 만료(U005)일 때만 재발급 시도. 그 외 401/403은 재시도해도 안 풀리므로 그대로 던짐.
+    if (status === 401 && code === 'U005') {
       const refreshed = await auth.refreshAccessToken()
       if (refreshed) {
         return await call()
       }
+      // refresh token도 만료/무효 — 세션 전체 만료로 보고 로그인 페이지로 보낸다.
+      await navigateTo('/login')
     }
     throw err
   }
