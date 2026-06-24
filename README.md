@@ -40,10 +40,14 @@ LLM은 숫자의 계산,예측을 신뢰할 수 없기 때문에 그 결과를 �
 - MyBatis: JPA의 약점인 복잡한 통계 쿼리 조회를 위한 선택
 - PostgreSQL: 분석·통계 쿼리(윈도우 함수 등) 지원이 강한 오픈소스 RDBMS
 - Spring Security + JWT: 사용자별 장부 격리를 위한 인증
-- OpenAI API: 매입/매출 데이터 기반 조언 생성
+- Gemini API (`gemini-2.5-flash`): 매입/매출 데이터 기반 조언 생성, 결제 없는 무료 티어 운영 (ADR-0004)
 
 **Frontend** (별도 모듈)
-- Vue (대시보드, API 소비)
+- Nuxt 4 + Vue 3: 대시보드, AI 가이드 UI
+- Pinia: 상태 관리
+- Tailwind CSS: 스타일링
+- Chart.js (vue-chartjs): 매출 차트
+- `$fetch`/`useFetch`: API 호출 (axios 미사용 — 공급망 공격 표면 축소, ADR-0005)
 
 ## 5. AI 활용 워크플로우
 
@@ -59,7 +63,7 @@ LLM은 숫자의 계산,예측을 신뢰할 수 없기 때문에 그 결과를 �
 [Harness — Guardrail]
 user_no 격리 검증 / 수치 출처 검증 (환각 차단)
        ↓
-[Model — OpenAI]
+[Model — Gemini]
 집계 결과를 자연어 조언으로 해석
 "이번 주 매입을 X% 줄이면 순익 Y 예상" 형태 가이드 생성
        ↓
@@ -96,9 +100,11 @@ psql -U <user> -d jangbu -f db/db_dump.sql
 ### 환경 변수
 | 변수 | 설명 | 기본값 |
 |---|---|---|
-| `DB_USERNAME` | DB 사용자명 | `jangbu` |
-| `DB_PASSWORD` | DB 비밀번호 | `jangbu` |
+| `DB_USERNAME` | DB 사용자명 | `postgres` |
+| `DB_PASSWORD` | DB 비밀번호 | `1234` |
 | `JWT_SECRET` | JWT 서명 키 (256bit 이상) | *(운영 환경에서 반드시 변경)* |
+| `GEMINI_API_KEY` | Gemini API 키 (ADR-0004) | *(미설정 시 AI 가이드 기능 비활성)* |
+| `NUXT_PUBLIC_API_BASE` | 프론트가 호출할 백엔드 URL | `http://localhost:8080` |
 
 ### 백엔드 실행
 ```bash
@@ -107,6 +113,14 @@ cd backend
 ```
 서버 기동: `http://localhost:8080`
 
+### 프론트엔드 실행
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Nuxt dev 서버 기동: `http://localhost:3000`
+
 ## 7. 주요 의사결정
 
 | # | 제목 | 결정 요약 |
@@ -114,5 +128,9 @@ cd backend
 | ADR-0001 | 영속성 프레임워크 분리 | 단순 CRUD → JPA+QueryDSL / 통계 집계 → MyBatis |
 | ADR-0002 | 인증·리프레시 토큰 처리 | JWT + refresh token DB 저장(SHA-256 해시), HttpOnly 쿠키 전달 |
 | ADR-0003 | user 삭제 시 장부 데이터 처리 | ON DELETE CASCADE — 토이 프로젝트 범위, 거래기록 보존 안 함 |
+| ADR-0004 | AI 가이드 LLM 제공자를 OpenAI에서 Gemini로 교체 | 결제 없는 무료 티어 운영 위해 `gemini-2.5-flash`로 교체, thinking 모드 비활성화 |
+| ADR-0005 | HTTP 클라이언트로 axios 대신 Nuxt 내장 $fetch/useFetch 사용 | axios 공급망 공격 표면 제거, 외부 HTTP 의존성 0개 |
+| ADR-0006 | HTTP 상태코드 컨벤션 | 인증·인가(401/403)·서버에러(500)만 실제 상태코드, 나머지 비즈니스 로직 결과는 200+`success:false` |
+| ADR-0007 | 장부 거래일은 미래 날짜를 허용하지 않음 | `trxDate`가 오늘보다 미래면 서비스 레이어에서 거부 (`L003`) |
 
 상세 내용: [`docs/adr/`](docs/adr/)
