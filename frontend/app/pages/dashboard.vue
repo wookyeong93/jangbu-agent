@@ -107,7 +107,7 @@ onMounted(loadGuide)
       <p v-if="guideLoading" class="text-sm text-[var(--color-text-muted)]">가이드를 불러오는 중...</p>
       <p v-else-if="guideErrorMessage" class="text-sm text-red-600">{{ guideErrorMessage }}</p>
       <template v-else-if="guide">
-        <p class="text-sm text-[var(--color-text)]">{{ guide.guideText }}</p>
+        <p class="whitespace-pre-line text-sm text-[var(--color-text)]">{{ guide.guideText }}</p>
         <p class="mt-3 text-xs text-[var(--color-text-muted)]">
           기준(최근 28일) · 매입 {{ formatCurrency(guide.basedPurchase) }} · 매출 {{ formatCurrency(guide.basedSale) }}
           · 지출 {{ formatCurrency(guide.basedExpense) }} · 순익 {{ formatCurrency(guide.basedProfit) }}

@@ -1,5 +1,6 @@
 package com.wookyeong.jangbu_agent.domain.guide.service;
 
+import com.wookyeong.jangbu_agent.common.event.LedgerChangedEvent;
 import com.wookyeong.jangbu_agent.common.exception.BusinessException;
 import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.guide.dto.*;
@@ -11,8 +12,12 @@ import com.wookyeong.jangbu_agent.domain.user.repository.UserRepository;
 import com.wookyeong.jangbu_agent.infra.ai.GeminiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -36,9 +41,9 @@ public class GuideService {
 
     private static final int ANALYSIS_PERIOD_DAYS = 28;
     private static final String NO_ACTIVITY_GUIDE_TEXT =
-            "최근 28일간 등록된 매입·매출 내역이 없습니다. 매입과 매출을 먼저 등록해 주세요.";
+            "최근 28일간 등록된 매입·매출 내역이 없습니다.\n매입과 매출을 먼저 등록해 주세요.";
     private static final String GUARDRAIL_VIOLATION_GUIDE_TEXT =
-            "AI 해석 결과에서 확인되지 않은 수치가 발견되어 가이드를 표시할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+            "AI 해석 결과에서 확인되지 않은 수치가 발견되어 가이드를 표시할 수 없습니다.\n잠시 후 다시 시도해 주세요.";
 
     private final GuideAnalysisMapper guideAnalysisMapper;
     private final GuideRepository guideRepository;
@@ -117,6 +122,35 @@ public class GuideService {
                 .build();
 
         return toResponse(guideRepository.save(guide));
+    }
+
+    /**
+     * 장부 변경 후 오늘자 가이드를 강제로 다시 만든다.
+     *
+     * <p>{@link #getOrCreateDailyGuide} 와 달리 캐시가 있어도 지우고 재생성한다 —
+     * 매입·매출·지출이 바뀌면 그 변경을 반영한 가이드를 보여줘야 하기 때문.
+     */
+    @Transactional
+    public void regenerateDailyGuide(Integer userNo) {
+        guideRepository.findByUserUserNoAndGuideDt(userNo, LocalDate.now())
+                .ifPresent(guideRepository::delete);
+        getOrCreateDailyGuide(userNo);
+    }
+
+    /**
+     * 장부 변경 이벤트 구독 — 커밋된 변경에 대해서만, 요청 스레드와 분리된 별도 스레드에서 처리한다.
+     * (ledger 도메인은 이 메서드를 모른다 — {@link LedgerChangedEvent} 만 발행할 뿐이다.)
+     *
+     * <p>AFTER_COMMIT 시점엔 원래 트랜잭션이 이미 끝나 있어 트랜잭션이 없는 상태다 — REQUIRES_NEW로
+     * 새 트랜잭션을 직접 열어야 안에서 호출하는 regenerateDailyGuide/getOrCreateDailyGuide(같은
+     * 클래스 내부 호출이라 자기 자신의 @Transactional은 적용 안 됨)가 거기에 합류한다.
+     * (@TransactionalEventListener 는 REQUIRES_NEW/NOT_SUPPORTED 외의 전파 옵션을 금지한다.)
+     */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onLedgerChanged(LedgerChangedEvent event) {
+        regenerateDailyGuide(event.userNo());
     }
 
     /** 오늘 기준 집계 데이터를 조회·계산해 {@link GuideContextDto} 로 반환한다. */
