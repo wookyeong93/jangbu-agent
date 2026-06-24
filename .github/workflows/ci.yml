@@ -38,6 +38,10 @@ jobs:
           psql -h localhost -U postgres -d jangbu -f db/schema_ddl.sql
           psql -h localhost -U postgres -d jangbu -f db/db_dump.sql
 
+      - name: gradlew 실행 권한 부여 (Windows에서 체크아웃 시 실행 비트 누락됨)
+        working-directory: backend
+        run: chmod +x gradlew
+
       - name: 테스트 실행 (eval 태그는 gradle build.gradle 설정으로 기본 제외)
         working-directory: backend
         env:
