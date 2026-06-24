@@ -20,7 +20,8 @@
 ### 등록·수정 규칙
 - `trx_type`: `PURCHASE`(매입) / `SALE`(매출) / `EXPENSE`(지출) 3종만 허용. db_dump.sql 참조. 그 외 값은 서비스 레이어에서 거부.
 - `amount`: 0 이상 정수만 허용. 소수점 불가.
-- `trx_date`: 기본값 오늘. 사용자가 과거·미래 날짜로 수정 가능.
+- `trx_date`: 기본값 오늘. 과거 날짜로는 수정 가능하나 미래 날짜는 허용하지 않는다 (ADR-0007) —
+  장부는 이미 발생한 거래만 기록한다.
 - `trx_name`: 선택 입력 (NULL 허용).
 - 수정 가능 필드: `trx_type` / `trx_date` / `amount` / `trx_name`. `user_no`·`ledger_no`는 변경 불가.
 

@@ -43,6 +43,7 @@ public class LedgerService {
         }
 
         LocalDate trxDate = request.getTrxDate() != null ? request.getTrxDate() : LocalDate.now();
+        validateTrxDate(trxDate);
 
         Ledger ledger = Ledger.builder()
                 .user(userRepository.getReferenceById(userNo))
@@ -89,6 +90,7 @@ public class LedgerService {
 
     public LedgerResponse update(Integer userNo, Long ledgerNo, LedgerUpdateRequest request) {
         validateTrxType(request.getTrxType());
+        validateTrxDate(request.getTrxDate());
         Ledger ledger = getOwnedLedger(userNo, ledgerNo);
         ledger.update(request.getTrxType(), request.getTrxDate(), request.getTrxName(), request.getAmount());
         return LedgerResponse.from(ledger);
@@ -103,6 +105,13 @@ public class LedgerService {
     private void validateTrxType(String trxType) {
         if (!ALLOWED_TRX_TYPES.contains(trxType)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "항목은 PURCHASE/SALE/EXPENSE 중 하나여야 합니다.");
+        }
+    }
+
+    /** 장부는 이미 발생한 거래만 기록한다 — 미래 날짜는 거부한다 (ADR-0007). 과거 날짜는 허용. */
+    private void validateTrxDate(LocalDate trxDate) {
+        if (trxDate.isAfter(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.LEDGER_FUTURE_DATE_NOT_ALLOWED);
         }
     }
 
