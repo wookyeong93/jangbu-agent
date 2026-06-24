@@ -6,6 +6,7 @@ import com.wookyeong.jangbu_agent.infra.security.jwt.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -27,6 +28,7 @@ import java.io.IOException;
  * "만료"와 그 외 무효 사유(위조·형식오류·토큰없음)를 구분해 응답 에러코드를 분기한다 —
  * 프론트가 만료일 때만 재발급(refresh)을 시도할 수 있도록.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
@@ -38,6 +40,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
                           AuthenticationException authException) throws IOException {
         boolean expired = Boolean.TRUE.equals(request.getAttribute(JwtAuthFilter.ACCESS_TOKEN_EXPIRED_ATTR));
         ErrorCode errorCode = expired ? ErrorCode.EXPIRED_TOKEN : ErrorCode.UNAUTHORIZED;
+        log.warn("인증 실패: uri={}, reason={}", request.getRequestURI(), errorCode);
 
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

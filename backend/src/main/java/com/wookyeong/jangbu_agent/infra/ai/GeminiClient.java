@@ -3,10 +3,13 @@ package com.wookyeong.jangbu_agent.infra.ai;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.wookyeong.jangbu_agent.domain.guide.dto.GuideContextDto;
 import com.wookyeong.jangbu_agent.domain.guide.dto.WeekdaySalesResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,6 +19,7 @@ import java.util.stream.Collectors;
  * <p>LLM 호출은 이 클래스가 단일 책임으로 담당한다.
  * 수치 계산은 하지 않는다 — {@link GuideContextDto} 를 받아 해석 텍스트만 생성한다.
  */
+@Slf4j
 @Component
 public class GeminiClient {
 
@@ -41,35 +45,57 @@ public class GeminiClient {
     }
 
     public String generateGuide(GuideContextDto ctx) {
-        GenerateContentRequest request = new GenerateContentRequest(
-                new GenerateContentRequest.SystemInstruction(
-                        List.of(new GenerateContentRequest.Part(SYSTEM_PROMPT))),
-                List.of(new GenerateContentRequest.Content(
-                        "user", List.of(new GenerateContentRequest.Part(buildUserPrompt(ctx))))),
-                new GenerateContentRequest.GenerationConfig(
-                        0.3, 600, new GenerateContentRequest.ThinkingConfig(0))
-        );
+        Instant start = Instant.now();
+        try {
+            GenerateContentRequest request = new GenerateContentRequest(
+                    new GenerateContentRequest.SystemInstruction(
+                            List.of(new GenerateContentRequest.Part(SYSTEM_PROMPT))),
+                    List.of(new GenerateContentRequest.Content(
+                            "user", List.of(new GenerateContentRequest.Part(buildUserPrompt(ctx))))),
+                    new GenerateContentRequest.GenerationConfig(
+                            0.3, 600, new GenerateContentRequest.ThinkingConfig(0))
+            );
 
-        GenerateContentResponse response = restClient.post()
-                .uri("/models/{model}:generateContent", props.getModel())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(GenerateContentResponse.class);
+            GenerateContentResponse response = restClient.post()
+                    .uri("/models/{model}:generateContent", props.getModel())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(GenerateContentResponse.class);
 
-        if (response == null || response.candidates().isEmpty()) {
-            throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
+            if (response == null || response.candidates().isEmpty()) {
+                throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
+            }
+
+            String text = response.candidates().get(0).content().parts().stream()
+                    .filter(part -> !Boolean.TRUE.equals(part.thought()))
+                    .map(GenerateContentResponse.Part::text)
+                    .collect(Collectors.joining());
+
+            if (text.isBlank()) {
+                throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
+            }
+
+            logCompletion(start, response.usageMetadata());
+            return text;
+        } catch (RuntimeException e) {
+            log.warn("Gemini 호출 실패: model={}, durationMs={}", props.getModel(), elapsedMs(start));
+            throw e;
         }
+    }
 
-        String text = response.candidates().get(0).content().parts().stream()
-                .filter(part -> !Boolean.TRUE.equals(part.thought()))
-                .map(GenerateContentResponse.Part::text)
-                .collect(Collectors.joining());
-
-        if (text.isBlank()) {
-            throw new IllegalStateException("Gemini 응답이 비어 있습니다.");
+    private void logCompletion(Instant start, GenerateContentResponse.UsageMetadata usage) {
+        if (usage == null) {
+            log.info("Gemini 호출 완료: model={}, durationMs={}", props.getModel(), elapsedMs(start));
+            return;
         }
-        return text;
+        log.info("Gemini 호출 완료: model={}, durationMs={}, promptTokens={}, candidatesTokens={}, totalTokens={}",
+                props.getModel(), elapsedMs(start),
+                usage.promptTokenCount(), usage.candidatesTokenCount(), usage.totalTokenCount());
+    }
+
+    private long elapsedMs(Instant start) {
+        return Duration.between(start, Instant.now()).toMillis();
     }
 
     public String getModelName() {
@@ -130,9 +156,13 @@ public class GeminiClient {
         record ThinkingConfig(@JsonProperty("thinkingBudget") int thinkingBudget) {}
     }
 
-    record GenerateContentResponse(List<Candidate> candidates) {
+    record GenerateContentResponse(List<Candidate> candidates, UsageMetadata usageMetadata) {
         record Candidate(Content content) {}
         record Content(List<Part> parts) {}
         record Part(String text, Boolean thought) {}
+        record UsageMetadata(
+                @JsonProperty("promptTokenCount") int promptTokenCount,
+                @JsonProperty("candidatesTokenCount") int candidatesTokenCount,
+                @JsonProperty("totalTokenCount") int totalTokenCount) {}
     }
 }
