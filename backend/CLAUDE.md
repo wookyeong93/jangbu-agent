@@ -100,8 +100,17 @@ com.wookyeong.jangbu_agent
 - `infra/logging/RequestLoggingFilter` — MDC requestId·userId 주입 및 요청 완료 후 정리
 - `common/exception/GlobalExceptionHandler` — 예외 레벨 분리 (WARN / ERROR)
 
+## 주석 컨벤션
+- `common/`, `infra/` 파일에는 클래스·메서드 Javadoc을 작성한다 — 진입점 코드(ApiResponse 팩토리,
+  ErrorCode 체계, SecurityConfig 등)는 주석 없이는 사용법을 파악하기 어렵기 때문.
+- `domain/` 비즈니스 로직은 잘 지어진 이름으로 의도가 드러나면 불필요한 주석을 추가하지 않는다.
+
 ## 테스트
 - 집계·계산 로직은 단위 테스트 필수. 경계값(0건, 단일건, 월 경계) 포함.
+- LLM 응답 품질 Eval은 일반 단위 테스트와 분리한다. `@Tag("eval")`을 붙이고 `./gradlew evalTest`로만
+  실행 (기본 `test`는 `excludeTags 'eval'`). 실제 모델을 호출하므로 `GEMINI_API_KEY` 없으면 자동 스킵
+  (`@EnabledIfEnvironmentVariable`). 새 LLM 기능을 추가하면 `GuideEvalTest`처럼 대표 시나리오별로
+  응답이 비어있지 않은지 + Guardrail을 통과하는지 검증하는 케이스를 함께 만든다.
 
 ## 사용자 도메인
 > 상세 정책: [docs/policy/user.md](../docs/policy/user.md)
