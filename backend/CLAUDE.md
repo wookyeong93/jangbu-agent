@@ -95,11 +95,19 @@ com.wookyeong.jangbu_agent
 | ERROR | 그 외 모든 예외 (서버 오류)                         |
 
 - 정상 흐름에는 INFO 이하 로그를 찍지 않는다 (노이즈 차단).
+  - 예외: LLM 외부 호출(Gemini 등)은 비용·성능 모니터링 목적으로 호출 1건당 INFO 로그 1줄
+    (모델명, 소요시간ms, 토큰 사용량)을 남긴다. 그 외 도메인 정상 흐름 로그는 계속 금지.
 - 스택 트레이스는 ERROR 레벨에만 포함한다.
+- 인증 실패(401, 토큰 없음·위조·만료)는 `RequestLoggingFilter`보다 먼저 실행되는
+  `RestAuthenticationEntryPoint`에서 WARN으로 남긴다. 이 시점은 MDC 주입 전이라 requestId·userId가
+  비어있게 찍힌다 — 보안 필터 체인이 로깅 필터보다 먼저 도는 구조상 제약이며, 로그 메시지에 요청
+  URI를 포함해 최소한의 추적 정보를 남긴다.
 
 ### 구현 위치
 - `infra/logging/RequestLoggingFilter` — MDC requestId·userId 주입 및 요청 완료 후 정리
 - `common/exception/GlobalExceptionHandler` — 예외 레벨 분리 (WARN / ERROR)
+- `infra/ai/GeminiClient` — LLM 호출 1건당 INFO 로그 (모델·소요시간·토큰 사용량)
+- `infra/security/RestAuthenticationEntryPoint` — 인증 실패 WARN 로그
 
 ## 주석 컨벤션
 - `common/`, `infra/` 파일에는 클래스·메서드 Javadoc을 작성한다 — 진입점 코드(ApiResponse 팩토리,
