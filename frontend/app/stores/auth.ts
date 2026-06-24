@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
-import { API_TIMEOUT_MS, isNetworkError, NETWORK_ERROR_MESSAGE } from '~/types/api'
-import type { ApiResponse } from '~/types/api'
-import type { LoginRequest, TokenResponse, UserResponse } from '~/types/auth'
+import * as authApi from '~/api/auth'
+import * as userApi from '~/api/user'
+import type { UpdateProfileRequest, UserResponse } from '~/types/auth'
 
 /**
  * accessToken은 메모리에만 보관 (새로고침하면 사라짐 — refresh token httpOnly 쿠키로
  * 재발급받아 복구하는 흐름은 middleware/auth.global.ts 에서 라우트 진입마다 처리한다).
+ *
+ * <p>실제 API 호출은 api/auth.ts, api/user.ts 에 있다 — 이 스토어는 상태(accessToken/profile)
+ * 관리와 그 호출들을 묶는 흐름 제어만 담당한다.
  */
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null)
@@ -14,20 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!accessToken.value)
 
   async function login(userId: string, password: string) {
-    const config = useRuntimeConfig()
-    const body: LoginRequest = { userId, password }
-    let res: ApiResponse<TokenResponse>
-    try {
-      res = await $fetch<ApiResponse<TokenResponse>>('/api/auth/login', {
-        method: 'POST',
-        baseURL: config.public.apiBase,
-        credentials: 'include',
-        timeout: API_TIMEOUT_MS,
-        body
-      })
-    } catch (err) {
-      throw new Error(isNetworkError(err) ? NETWORK_ERROR_MESSAGE : '로그인에 실패했습니다.')
-    }
+    const res = await authApi.login({ userId, password })
 
     if (!res.success || !res.data) {
       throw new Error(res.error?.message ?? '로그인에 실패했습니다.')
@@ -38,7 +28,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchProfile() {
-    profile.value = await useApiFetch<UserResponse>('/api/users/me')
+    profile.value = await userApi.getProfile()
+  }
+
+  async function updateProfile(payload: UpdateProfileRequest) {
+    await userApi.updateProfile(payload)
+    await fetchProfile()
   }
 
   /**
@@ -48,13 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function refreshAccessToken(): Promise<boolean> {
     try {
-      const config = useRuntimeConfig()
-      const res = await $fetch<ApiResponse<TokenResponse>>('/api/auth/refresh', {
-        method: 'POST',
-        baseURL: config.public.apiBase,
-        credentials: 'include',
-        timeout: API_TIMEOUT_MS
-      })
+      const res = await authApi.refresh()
       if (res.success && res.data) {
         accessToken.value = res.data.accessToken
         return true
@@ -68,7 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      await useApiFetch('/api/auth/logout', { method: 'POST' })
+      await authApi.logout()
     } finally {
       clear()
     }
@@ -79,5 +68,5 @@ export const useAuthStore = defineStore('auth', () => {
     profile.value = null
   }
 
-  return { accessToken, profile, isAuthenticated, login, fetchProfile, refreshAccessToken, logout, clear }
+  return { accessToken, profile, isAuthenticated, login, fetchProfile, updateProfile, refreshAccessToken, logout, clear }
 })

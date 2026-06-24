@@ -7,6 +7,9 @@
  *
  * <p>탭을 보고 있다가 한동안 자리를 비워 access token이 만료된 경우는 여기서 잡지 않고,
  * 해당 페이지가 API를 호출할 때 useApiFetch 의 401(U005) → refresh 흐름에서 처리한다.
+ *
+ * <p>profile은 login() 안에서만 채워진다 — 새로고침 복구 경로(refreshAccessToken)는
+ * accessToken만 갱신하므로, AppHeader 등에서 쓸 profile이 비어 있으면 여기서 같이 채운다.
  */
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path === '/login') {
@@ -14,12 +17,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   const auth = useAuthStore()
-  if (auth.isAuthenticated) {
-    return
+  if (!auth.isAuthenticated) {
+    const refreshed = await auth.refreshAccessToken()
+    if (!refreshed) {
+      return navigateTo('/login')
+    }
   }
 
-  const refreshed = await auth.refreshAccessToken()
-  if (!refreshed) {
-    return navigateTo('/login')
+  if (!auth.profile) {
+    await auth.fetchProfile()
   }
 })

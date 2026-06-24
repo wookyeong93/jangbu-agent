@@ -3,7 +3,9 @@ import { API_TIMEOUT_MS, ApiError, NETWORK_ERROR_MESSAGE, isNetworkError } from 
 
 interface UseApiFetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  body?: Record<string, unknown>
+  // ofetch의 body 타입(Record<string, any>)과 맞춰야 LoginRequest 같은 구체 DTO 인터페이스를
+  // 그대로 넘길 수 있다 — Record<string, unknown>은 인덱스 시그니처가 없는 인터페이스를 거부한다.
+  body?: Record<string, any>
   query?: Record<string, unknown>
 }
 

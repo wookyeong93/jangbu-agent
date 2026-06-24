@@ -12,7 +12,7 @@ async function handleSubmit() {
   loading.value = true
   try {
     await auth.login(userId.value, password.value)
-    await navigateTo('/')
+    await navigateTo('/dashboard')
   } catch (err) {
     const message = err instanceof Error ? err.message : '로그인에 실패했습니다.'
     await modal.alert({ title: '로그인 실패', message })
