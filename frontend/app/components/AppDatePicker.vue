@@ -7,6 +7,8 @@ defineProps<{
   label?: string
   error?: string
   id?: string
+  /** ISO 형식 (YYYY-MM-DD). 선택 가능한 최대 날짜. */
+  max?: string
 }>()
 
 defineEmits<{
@@ -23,6 +25,7 @@ defineEmits<{
       :id="id"
       type="date"
       :value="modelValue"
+      :max="max"
       v-bind="$attrs"
       class="w-full rounded-md border px-3 py-2 text-sm focus:outline-none"
       :class="error

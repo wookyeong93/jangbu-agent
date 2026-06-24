@@ -105,6 +105,10 @@ async function submitForm() {
     formError.value = '금액은 0 이상의 정수로 입력해주세요.'
     return
   }
+  if (form.value.trxDate > todayString()) {
+    formError.value = '거래일은 오늘 이전 날짜만 선택할 수 있습니다.'
+    return
+  }
 
   submitting.value = true
   try {
@@ -270,6 +274,7 @@ onMounted(loadLedger)
               <AppDatePicker
                 v-model="form.trxDate"
                 label="거래일"
+                :max="todayString()"
               />
               <AppInput
                 v-model="form.trxName"
