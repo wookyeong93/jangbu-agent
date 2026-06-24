@@ -19,7 +19,6 @@ watch(
       <div
         v-if="modal.isOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        @click.self="modal.handleCancel"
         @keydown.esc="modal.handleCancel"
       >
         <div ref="dialogRef" class="w-full max-w-sm rounded-lg bg-[var(--color-surface)] p-6 shadow-lg" tabindex="-1">
