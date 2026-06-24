@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -33,6 +34,7 @@ class LedgerServiceTest {
 
     @Mock LedgerRepository ledgerRepository;
     @Mock UserRepository userRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks LedgerService ledgerService;
 
@@ -47,6 +49,7 @@ class LedgerServiceTest {
         User user = User.builder().userNo(USER_NO).userId("u1").userPwd("pw").build();
         Ledger saved = buildLedger(10L, user, "PURCHASE", LocalDate.now(), null, 5000L);
 
+        given(userRepository.existsById(USER_NO)).willReturn(true);
         given(userRepository.getReferenceById(USER_NO)).willReturn(user);
         given(ledgerRepository.save(any())).willReturn(saved);
 
@@ -58,6 +61,19 @@ class LedgerServiceTest {
     }
 
     @Test
+    @DisplayName("JWT는 유효하지만 그 사이 계정이 삭제된 경우 — FORBIDDEN (ADR-0006)")
+    void create_userNoLongerExists_throwsForbidden() {
+        given(userRepository.existsById(USER_NO)).willReturn(false);
+
+        LedgerCreateRequest req = makeCreateRequest("PURCHASE", 5000L, null, null);
+
+        assertThatThrownBy(() -> ledgerService.create(USER_NO, req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
     @DisplayName("등록 실패 — 허용되지 않은 trxType")
     void create_invalidTrxType_throwsException() {
         LedgerCreateRequest req = makeCreateRequest("REFUND", 1000L, null, null);
@@ -66,6 +82,35 @@ class LedgerServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("등록 실패 — 미래 날짜는 LEDGER_FUTURE_DATE_NOT_ALLOWED (ADR-0007)")
+    void create_futureTrxDate_throwsException() {
+        given(userRepository.existsById(USER_NO)).willReturn(true);
+        LedgerCreateRequest req = makeCreateRequest("PURCHASE", 1000L, LocalDate.now().plusDays(1), null);
+
+        assertThatThrownBy(() -> ledgerService.create(USER_NO, req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.LEDGER_FUTURE_DATE_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("등록 성공 — 과거 날짜는 허용")
+    void create_pastTrxDate_allowed() {
+        User user = User.builder().userNo(USER_NO).userId("u1").userPwd("pw").build();
+        LocalDate pastDate = LocalDate.now().minusDays(3);
+        Ledger saved = buildLedger(11L, user, "PURCHASE", pastDate, null, 5000L);
+
+        given(userRepository.existsById(USER_NO)).willReturn(true);
+        given(userRepository.getReferenceById(USER_NO)).willReturn(user);
+        given(ledgerRepository.save(any())).willReturn(saved);
+
+        LedgerCreateRequest req = makeCreateRequest("PURCHASE", 5000L, pastDate, null);
+        LedgerResponse result = ledgerService.create(USER_NO, req);
+
+        assertThat(result.getTrxDate()).isEqualTo(pastDate);
     }
 
     // ── 단건 조회 ─────────────────────────────────────────────────────────────────
@@ -217,6 +262,17 @@ class LedgerServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("수정 실패 — 미래 날짜는 LEDGER_FUTURE_DATE_NOT_ALLOWED (ADR-0007)")
+    void update_futureTrxDate_throwsException() {
+        LedgerUpdateRequest req = makeUpdateRequest("PURCHASE", LocalDate.now().plusDays(1), null, 100L);
+
+        assertThatThrownBy(() -> ledgerService.update(USER_NO, 1L, req))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.LEDGER_FUTURE_DATE_NOT_ALLOWED);
     }
 
     // ── 삭제 ─────────────────────────────────────────────────────────────────────

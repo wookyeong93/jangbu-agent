@@ -2,6 +2,7 @@ package com.wookyeong.jangbu_agent.infra.security.jwt;
 
 import com.wookyeong.jangbu_agent.infra.security.UserPrincipal;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -84,6 +85,21 @@ public class JwtTokenProvider {
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /**
+     * validateToken() 이 false 인 토큰의 무효 원인이 "만료"인지 구분한다.
+     * 서명 위조·형식 오류 등 다른 무효 사유는 false — 만료만 별도 에러코드로 안내하기 위함.
+     */
+    public boolean isExpired(String token) {
+        try {
+            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+            return false;
+        } catch (ExpiredJwtException e) {
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;

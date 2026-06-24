@@ -34,3 +34,8 @@ jwt:
 springdoc:
   swagger-ui:
     try-it-out-enabled: true
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: gemini-2.5-flash
+  base-url: https://generativelanguage.googleapis.com/v1beta

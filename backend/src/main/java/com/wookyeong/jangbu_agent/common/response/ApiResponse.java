@@ -38,13 +38,17 @@ public class ApiResponse<T> {
     /**
      * ErrorCode 에 정의된 메시지를 그대로 사용.
      * 커스텀 메시지가 필요하면 {@link #fail(ErrorCode, String)} 사용.
+     *
+     * <p>제네릭이라 {@code ApiResponse<List<X>>} 등 어떤 응답 타입에서도 바로 쓸 수 있다
+     * (실패 시 {@code data} 는 항상 null). ADR-0006: 비즈니스 로직 결과는 HTTP 200 +
+     * 이 메서드로 응답하고, 컨트롤러에서 {@code ResponseEntity.ok(...)} 로 감싼다.
      */
-    public static ApiResponse<Void> fail(ErrorCode errorCode) {
+    public static <T> ApiResponse<T> fail(ErrorCode errorCode) {
         return new ApiResponse<>(false, null, new ErrorDetail(errorCode.getCode(), errorCode.getMessage()));
     }
 
     /** 검증 오류처럼 에러 메시지를 동적으로 조합해야 할 때 사용. */
-    public static ApiResponse<Void> fail(ErrorCode errorCode, String message) {
+    public static <T> ApiResponse<T> fail(ErrorCode errorCode, String message) {
         return new ApiResponse<>(false, null, new ErrorDetail(errorCode.getCode(), message));
     }
 

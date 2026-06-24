@@ -19,10 +19,15 @@ import java.io.IOException;
  *
  * <p>토큰이 없거나 유효하지 않은 경우 예외를 던지지 않고 인증 정보 없이 필터 체인을 통과시킨다.
  * 이후 {@code SecurityConfig} 의 인가 규칙에 의해 인증 필요 엔드포인트는 401 로 차단된다.
+ *
+ * <p>무효 사유가 "만료"인 경우 {@link #ACCESS_TOKEN_EXPIRED_ATTR} 요청 속성에 표시해 둔다.
+ * {@code RestAuthenticationEntryPoint} 가 이를 읽어 만료 전용 에러코드로 응답을 분기한다.
  */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    public static final String ACCESS_TOKEN_EXPIRED_ATTR = "jwt.accessTokenExpired";
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -31,9 +36,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String token = resolveToken(request);
-        if (token != null && jwtTokenProvider.validateToken(token)) {
-            Authentication authentication = jwtTokenProvider.getAuthentication(token);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+        if (token != null) {
+            if (jwtTokenProvider.validateToken(token)) {
+                Authentication authentication = jwtTokenProvider.getAuthentication(token);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } else if (jwtTokenProvider.isExpired(token)) {
+                request.setAttribute(ACCESS_TOKEN_EXPIRED_ATTR, true);
+            }
         }
         filterChain.doFilter(request, response);
     }

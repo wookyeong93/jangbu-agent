@@ -67,6 +67,37 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    @DisplayName("만료된 토큰은 isExpired() 가 true")
+    void expiredToken_isExpiredTrue() throws InterruptedException {
+        JwtProperties shortExpiry = new JwtProperties();
+        shortExpiry.setSecret("test-secret-key-must-be-at-least-32-bytes-long!!");
+        shortExpiry.setAccessTokenExpiry(1L); // 1ms
+        shortExpiry.setRefreshTokenExpiry(604_800_000L);
+        JwtTokenProvider shortProvider = new JwtTokenProvider(shortExpiry);
+        shortProvider.init();
+
+        String token = shortProvider.generateAccessToken("user01", 1);
+        Thread.sleep(10);
+
+        assertThat(shortProvider.isExpired(token)).isTrue();
+    }
+
+    @Test
+    @DisplayName("조작된 토큰은 만료가 아니라 isExpired() 가 false")
+    void tamperedToken_isExpiredFalse() {
+        String token = provider.generateAccessToken("user01", 1);
+        String tampered = token.substring(0, token.length() - 5) + "XXXXX";
+        assertThat(provider.isExpired(tampered)).isFalse();
+    }
+
+    @Test
+    @DisplayName("유효한 토큰은 isExpired() 가 false")
+    void validToken_isExpiredFalse() {
+        String token = provider.generateAccessToken("user01", 1);
+        assertThat(provider.isExpired(token)).isFalse();
+    }
+
+    @Test
     @DisplayName("SHA-256 해시는 결정론적이다 — 같은 입력이면 항상 같은 출력")
     void hashToken_isDeterministic() {
         String uuid = "550e8400-e29b-41d4-a716-446655440000";

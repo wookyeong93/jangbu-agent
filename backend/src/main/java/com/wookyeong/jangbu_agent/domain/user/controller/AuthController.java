@@ -9,6 +9,7 @@ import com.wookyeong.jangbu_agent.infra.security.jwt.JwtProperties;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +24,8 @@ import java.time.Duration;
  * <p>Refresh Token 전달 방식:
  * <ul>
  *   <li>로그인·재발급 응답: body 에는 {@code accessToken} 만 포함.
- *       Refresh Token 은 {@code HttpOnly; Secure; SameSite=Strict} 쿠키로만 전달.
+ *       Refresh Token 은 {@code HttpOnly; SameSite=Strict} 쿠키로만 전달.
+ *       {@code Secure} 는 prod 프로파일(HTTPS)에서만 true (로컬 HTTP 개발 환경 고려).
  *   <li>재발급·로그아웃 요청: 브라우저가 쿠키를 자동 전송 → JS 에서 토큰 값에 접근 불가.
  * </ul>
  */
@@ -37,6 +39,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtProperties jwtProperties;
+    private final Environment environment;
 
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<Void>> signup(@Valid @RequestBody SignupRequest request) {
@@ -73,7 +76,7 @@ public class AuthController {
     private ResponseCookie buildRefreshCookie(String value) {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, value)
                 .httpOnly(true)
-                .secure(true)           // HTTPS 전용. 로컬 HTTP 테스트 시 false 로 변경
+                .secure(isSecureEnvironment())
                 .sameSite("Strict")
                 .path("/api/auth")
                 .maxAge(Duration.ofMillis(jwtProperties.getRefreshTokenExpiry()))
@@ -83,10 +86,15 @@ public class AuthController {
     private ResponseCookie expireRefreshCookie() {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(isSecureEnvironment())
                 .sameSite("Strict")
                 .path("/api/auth")
                 .maxAge(0)
                 .build();
+    }
+
+    /** HTTPS로 서비스되는 환경(prod)인지 — SPRING_PROFILES_ACTIVE=prod 로 활성화. 로컬은 기본값(false)으로 HTTP. */
+    private boolean isSecureEnvironment() {
+        return environment.matchesProfiles("prod");
     }
 }
