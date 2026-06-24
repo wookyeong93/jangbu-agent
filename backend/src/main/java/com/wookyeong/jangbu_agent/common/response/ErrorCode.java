@@ -46,7 +46,10 @@ public enum ErrorCode {
     // ── Ledger ───────────────────────────────────────────────────────────────
     LEDGER_NOT_FOUND(HttpStatus.OK, "L001", "장부 항목을 찾을 수 없습니다."),
     /** 다른 user_no 의 장부에 접근 시도 — 인가 실패라 403 유지. */
-    LEDGER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "L002", "다른 사용자의 장부에 접근할 수 없습니다.");
+    LEDGER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "L002", "다른 사용자의 장부에 접근할 수 없습니다."),
+
+    // ── Dashboard ────────────────────────────────────────────────────────────
+    DASHBOARD_PERIOD_TOO_LONG(HttpStatus.OK, "D001", "조회 기간은 최대 12개월까지 가능합니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

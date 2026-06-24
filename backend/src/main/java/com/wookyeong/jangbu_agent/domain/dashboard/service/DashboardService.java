@@ -1,5 +1,7 @@
 package com.wookyeong.jangbu_agent.domain.dashboard.service;
 
+import com.wookyeong.jangbu_agent.common.exception.BusinessException;
+import com.wookyeong.jangbu_agent.common.response.ErrorCode;
 import com.wookyeong.jangbu_agent.domain.dashboard.dto.DashboardResponse;
 import com.wookyeong.jangbu_agent.domain.dashboard.dto.MonthlyKpiDto;
 import com.wookyeong.jangbu_agent.domain.dashboard.dto.MonthlySummaryResult;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 /**
@@ -22,27 +25,41 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class DashboardService {
 
+    /** 추이 조회 개월 수 상한. 그 이상은 차트로 보기엔 데이터가 너무 많아 비즈니스 규칙으로 막는다. */
+    private static final int MAX_TREND_MONTHS = 12;
+
     private final DashboardMapper dashboardMapper;
 
-    /** 당월 KPI + 최근 {@code months}개월(당월 포함) 추이를 반환한다. */
-    public DashboardResponse getDashboard(Integer userNo, int months) {
-        LocalDate today = LocalDate.now();
-        LocalDate currentMonthStart = today.withDayOfMonth(1);
-        LocalDate currentMonthEnd = today.withDayOfMonth(today.lengthOfMonth());
+    /**
+     * KPI(current)는 {@code month} 기준(안 주면 오늘이 속한 달). trend는 그 달부터 과거
+     * {@code months}개월(해당 달 포함) 추이 — months는 1~{@value #MAX_TREND_MONTHS}.
+     */
+    public DashboardResponse getDashboard(Integer userNo, YearMonth month, int months) {
+        validateMonths(months);
+
+        YearMonth targetMonth = month != null ? month : YearMonth.from(LocalDate.now());
+        LocalDate targetMonthStart = targetMonth.atDay(1);
+        LocalDate targetMonthEnd = targetMonth.atEndOfMonth();
 
         MonthlySummaryResult currentSummary =
-                dashboardMapper.getSummaryByPeriod(userNo, currentMonthStart, currentMonthEnd);
-        MonthlyKpiDto current = toKpiDto(today.getYear(), today.getMonthValue(), currentSummary);
+                dashboardMapper.getSummaryByPeriod(userNo, targetMonthStart, targetMonthEnd);
+        MonthlyKpiDto current = toKpiDto(targetMonth.getYear(), targetMonth.getMonthValue(), currentSummary);
 
-        LocalDate trendStart = currentMonthStart.minusMonths(months - 1L);
+        LocalDate trendStart = targetMonthStart.minusMonths(months - 1L);
         List<MonthlyTrendRow> trendRows =
-                dashboardMapper.getMonthlyTrend(userNo, trendStart, currentMonthEnd);
+                dashboardMapper.getMonthlyTrend(userNo, trendStart, targetMonthEnd);
         List<MonthlyKpiDto> trend = trendRows.stream().map(this::toKpiDto).toList();
 
         return DashboardResponse.builder()
                 .current(current)
                 .trend(trend)
                 .build();
+    }
+
+    private void validateMonths(int months) {
+        if (months > MAX_TREND_MONTHS) {
+            throw new BusinessException(ErrorCode.DASHBOARD_PERIOD_TOO_LONG);
+        }
     }
 
     private MonthlyKpiDto toKpiDto(int year, int month, MonthlySummaryResult r) {
